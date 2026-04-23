@@ -13,6 +13,10 @@ Two registration paths, one provider:
 
 `MoonshotServiceProvider::needsGatewayOverride()` reflects on `PrismGateway::toPrismProvider()`'s return type — once the upstream PR widens it to `PrismProvider|string`, the override is skipped automatically.
 
+## Type-safety
+
+PHPStan runs at `level: max`. The Moonshot HTTP responses arrive as untyped JSON, so all reads go through `Concerns\AccessesResponseData` (`dataString`, `dataInt`, `dataList`, `dataArray`, `dataNullableString`). When adding new fields, do **not** call `data_get()` directly in handler/map code — extend the trait and route through it. The trait keeps `mixed` quarantined to one place.
+
 ## Common pitfalls
 
 - **`provider()` in `ImageMapper` returns the string `'moonshot'`**, not a `Prism\Prism\Enums\Provider` case — that enum is closed and we are not in it. Don't change to enum form.

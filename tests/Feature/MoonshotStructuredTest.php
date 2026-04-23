@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Jonaspauleta\PrismMoonshot\Moonshot;
 use Prism\Prism\Enums\FinishReason;
@@ -49,10 +50,10 @@ it('returns structured JSON output with response_format=json_object', function (
     expect($response->structured)->toBe(['name' => 'Spa', 'country' => 'Belgium']);
     expect($response->finishReason)->toBe(FinishReason::Stop);
 
-    Http::assertSent(function ($request): bool {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
 
-        return ($body['response_format']['type'] ?? null) === 'json_object'
-            && $body['model'] === 'kimi-k2.6';
+        return data_get($body, 'response_format.type') === 'json_object'
+            && data_get($body, 'model') === 'kimi-k2.6';
     });
 });

@@ -32,13 +32,38 @@ final class MoonshotServiceProvider extends ServiceProvider
     private function registerWithPrism(): void
     {
         $this->app->extend(PrismManager::class, function (PrismManager $manager): PrismManager {
-            $manager->extend(Moonshot::KEY, fn (Application $app, array $config): Moonshot => new Moonshot(
-                apiKey: $config['api_key'] ?? $config['key'] ?? '',
-                url: $config['url'] ?? Moonshot::DEFAULT_URL,
-            ));
+            $manager->extend(Moonshot::KEY, $this->buildPrismMoonshot(...));
 
             return $manager;
         });
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     */
+    private function buildPrismMoonshot(Application $app, array $config): Moonshot
+    {
+        return new Moonshot(
+            apiKey: $this->stringConfig($config, ['api_key', 'key']),
+            url: $this->stringConfig($config, ['url'], Moonshot::DEFAULT_URL),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $config
+     * @param  list<string>  $keys
+     */
+    private function stringConfig(array $config, array $keys, string $default = ''): string
+    {
+        foreach ($keys as $key) {
+            $value = $config[$key] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                return $value;
+            }
+        }
+
+        return $default;
     }
 
     /**

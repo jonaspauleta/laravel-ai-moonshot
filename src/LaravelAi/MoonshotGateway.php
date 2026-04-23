@@ -8,6 +8,9 @@ use Jonaspauleta\PrismMoonshot\Moonshot;
 use Laravel\Ai\Gateway\Prism\PrismGateway;
 use Laravel\Ai\Providers\Provider;
 use Override;
+use Prism\Prism\Embeddings\PendingRequest as EmbeddingsPendingRequest;
+use Prism\Prism\Structured\PendingRequest as StructuredPendingRequest;
+use Prism\Prism\Text\PendingRequest as TextPendingRequest;
 
 /**
  * Bridges Laravel AI SDK's PrismGateway to the custom Moonshot Prism provider.
@@ -22,20 +25,22 @@ use Override;
 final class MoonshotGateway extends PrismGateway
 {
     /**
-     * @param  mixed  $prism  Pending Prism request (text, structured, or embeddings builder)
+     * @param  TextPendingRequest|StructuredPendingRequest|EmbeddingsPendingRequest  $prism
      */
     #[Override]
     protected function configure($prism, Provider $provider, string $model): mixed
     {
         if ($provider->driver() === Moonshot::KEY) {
-            return $prism->using(
-                Moonshot::KEY,
-                $model,
-                array_filter([
-                    ...$provider->additionalConfiguration(),
-                    'api_key' => $provider->providerCredentials()['key'],
-                ]),
-            );
+            $credentials = $provider->providerCredentials();
+            $key = is_string($credentials['key'] ?? null) ? $credentials['key'] : '';
+
+            /** @var array<string, mixed> $config */
+            $config = array_filter([
+                ...$provider->additionalConfiguration(),
+                'api_key' => $key,
+            ]);
+
+            return $prism->using(Moonshot::KEY, $model, $config);
         }
 
         return parent::configure($prism, $provider, $model);

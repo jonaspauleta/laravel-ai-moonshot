@@ -9,8 +9,8 @@ use Prism\Prism\Tool;
 final class ToolMap
 {
     /**
-     * @param  Tool[]  $tools
-     * @return array<int, array<string, mixed>>
+     * @param  list<Tool>  $tools
+     * @return list<array<string, mixed>>
      */
     public static function map(array $tools): array
     {

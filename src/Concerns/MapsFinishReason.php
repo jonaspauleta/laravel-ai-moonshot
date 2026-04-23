@@ -9,11 +9,13 @@ use Prism\Prism\Enums\FinishReason;
 
 trait MapsFinishReason
 {
+    use AccessesResponseData;
+
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     protected function mapFinishReason(array $data): FinishReason
     {
-        return FinishReasonMap::map(data_get($data, 'choices.0.finish_reason', ''));
+        return FinishReasonMap::map($this->dataString($data, 'choices.0.finish_reason'));
     }
 }

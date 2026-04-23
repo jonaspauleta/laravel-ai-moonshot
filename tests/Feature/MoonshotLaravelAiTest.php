@@ -8,7 +8,7 @@ use Laravel\Ai\AiManager;
 use Laravel\Ai\AiServiceProvider;
 
 beforeEach(function (): void {
-    $this->app->register(AiServiceProvider::class);
+    app()->register(AiServiceProvider::class);
 
     config()->set('ai.providers.moonshot', [
         'driver' => Moonshot::KEY,
@@ -18,16 +18,20 @@ beforeEach(function (): void {
 });
 
 it('registers the Moonshot driver with the Laravel AI manager', function (): void {
-    $manager = $this->app->make(AiManager::class);
+    /** @var AiManager $manager */
+    $manager = resolve(AiManager::class);
 
     $provider = $manager->textProvider(Moonshot::KEY);
 
     expect($provider)->toBeInstanceOf(MoonshotProvider::class);
+
+    /** @var MoonshotProvider $provider */
     expect($provider->driver())->toBe(Moonshot::KEY);
 });
 
 it('exposes Kimi defaults for tiered model resolution', function (): void {
-    $manager = $this->app->make(AiManager::class);
+    /** @var AiManager $manager */
+    $manager = resolve(AiManager::class);
 
     $provider = $manager->textProvider(Moonshot::KEY);
 
@@ -43,7 +47,8 @@ it('honours overridden model defaults from config', function (): void {
         'smartest' => 'kimi-k2-thinking-turbo',
     ]);
 
-    $manager = $this->app->make(AiManager::class);
+    /** @var AiManager $manager */
+    $manager = resolve(AiManager::class);
 
     $provider = $manager->textProvider(Moonshot::KEY);
 

@@ -15,12 +15,12 @@ use Prism\Prism\ValueObjects\ToolCall;
 
 final class MessageMap
 {
-    /** @var array<int, mixed> */
+    /** @var list<array<string, mixed>> */
     private array $mappedMessages = [];
 
     /**
-     * @param  array<int, Message>  $messages
-     * @param  SystemMessage[]  $systemPrompts
+     * @param  list<Message>  $messages
+     * @param  list<SystemMessage>  $systemPrompts
      */
     public function __construct(
         private array $messages,
@@ -33,7 +33,7 @@ final class MessageMap
     }
 
     /**
-     * @return array<int, mixed>
+     * @return list<array<string, mixed>>
      */
     public function __invoke(): array
     {

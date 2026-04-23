@@ -250,7 +250,7 @@ final class Stream
     }
 
     /**
-     * @return array<string, mixed>|null
+     * @return array<array-key, mixed>|null
      *
      * @throws PrismStreamDecodeException
      */
@@ -269,31 +269,31 @@ final class Stream
         }
 
         try {
-            return json_decode($line, true, flags: JSON_THROW_ON_ERROR);
+            $decoded = json_decode($line, true, flags: JSON_THROW_ON_ERROR);
         } catch (Throwable $e) {
             throw new PrismStreamDecodeException('Moonshot', $e);
         }
+
+        return is_array($decoded) ? $decoded : null;
     }
 
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     private function hasToolCalls(array $data): bool
     {
-        return ! empty(data_get($data, 'choices.0.delta.tool_calls', []));
+        return $this->dataList($data, 'choices.0.delta.tool_calls') !== [];
     }
 
     /**
-     * @param  array<string, mixed>  $data
-     * @param  array<int, array<string, mixed>>  $toolCalls
-     * @return array<int, array<string, mixed>>
+     * @param  array<array-key, mixed>  $data
+     * @param  list<array<array-key, mixed>>  $toolCalls
+     * @return list<array<array-key, mixed>>
      */
     private function extractToolCalls(array $data, array $toolCalls): array
     {
-        $deltaToolCalls = data_get($data, 'choices.0.delta.tool_calls', []);
-
-        foreach ($deltaToolCalls as $deltaToolCall) {
-            $index = data_get($deltaToolCall, 'index', 0);
+        foreach ($this->dataList($data, 'choices.0.delta.tool_calls') as $deltaToolCall) {
+            $index = $this->dataInt($deltaToolCall, 'index');
 
             if (! isset($toolCalls[$index])) {
                 $toolCalls[$index] = [
@@ -303,16 +303,20 @@ final class Stream
                 ];
             }
 
-            if ($id = data_get($deltaToolCall, 'id')) {
+            $id = $this->dataString($deltaToolCall, 'id');
+            if ($id !== '') {
                 $toolCalls[$index]['id'] = $id;
             }
 
-            if ($name = data_get($deltaToolCall, 'function.name')) {
+            $name = $this->dataString($deltaToolCall, 'function.name');
+            if ($name !== '') {
                 $toolCalls[$index]['name'] = $name;
             }
 
-            if ($arguments = data_get($deltaToolCall, 'function.arguments')) {
-                $toolCalls[$index]['arguments'] .= $arguments;
+            $arguments = $this->dataString($deltaToolCall, 'function.arguments');
+            if ($arguments !== '') {
+                $existing = is_string($toolCalls[$index]['arguments']) ? $toolCalls[$index]['arguments'] : '';
+                $toolCalls[$index]['arguments'] = $existing.$arguments;
             }
         }
 
@@ -320,40 +324,38 @@ final class Stream
     }
 
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     private function extractReasoningDelta(array $data): string
     {
-        return data_get($data, 'choices.0.delta.reasoning_content', '');
+        return $this->dataString($data, 'choices.0.delta.reasoning_content');
     }
 
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     private function extractContentDelta(array $data): string
     {
-        return data_get($data, 'choices.0.delta.content', '');
+        return $this->dataString($data, 'choices.0.delta.content');
     }
 
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     private function extractUsage(array $data): ?Usage
     {
-        $usage = data_get($data, 'usage');
-
-        if (! $usage) {
+        if ($this->dataArray($data, 'usage') === null) {
             return null;
         }
 
         return new Usage(
-            promptTokens: (int) data_get($usage, 'prompt_tokens', 0),
-            completionTokens: (int) data_get($usage, 'completion_tokens', 0),
+            promptTokens: $this->dataInt($data, 'usage.prompt_tokens'),
+            completionTokens: $this->dataInt($data, 'usage.completion_tokens'),
         );
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $toolCalls
+     * @param  list<array<array-key, mixed>>  $toolCalls
      * @return Generator<StreamEvent>
      */
     private function handleToolCalls(Request $request, string $text, array $toolCalls, int $depth): Generator
@@ -400,15 +402,15 @@ final class Stream
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $toolCalls
+     * @param  list<array<array-key, mixed>>  $toolCalls
      * @return array<int, ToolCall>
      */
     private function mapToolCalls(array $toolCalls): array
     {
         return array_map(fn (array $toolCall): ToolCall => new ToolCall(
-            id: data_get($toolCall, 'id'),
-            name: data_get($toolCall, 'name'),
-            arguments: data_get($toolCall, 'arguments'),
+            id: $this->dataString($toolCall, 'id'),
+            name: $this->dataString($toolCall, 'name'),
+            arguments: $this->dataString($toolCall, 'arguments'),
         ), $toolCalls);
     }
 
@@ -423,12 +425,15 @@ final class Stream
             array_merge([
                 'stream' => true,
                 'model' => $request->model(),
-                'messages' => (new MessageMap($request->messages(), $request->systemPrompts()))(),
+                'messages' => (new MessageMap(
+                    array_values($request->messages()),
+                    array_values($request->systemPrompts()),
+                ))(),
                 'max_tokens' => $request->maxTokens(),
             ], Arr::whereNotNull([
                 'temperature' => $request->temperature(),
                 'top_p' => $request->topP(),
-                'tools' => ToolMap::map($request->tools()) ?: null,
+                'tools' => ToolMap::map(array_values($request->tools())) ?: null,
                 'tool_choice' => ToolChoiceMap::map($request->toolChoice()),
             ])),
         );

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jonaspauleta\PrismMoonshot;
 
+use Closure;
 use Generator;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -72,27 +73,37 @@ final class Moonshot extends Provider
 
     private function handleResponseErrors(RequestException $e): never
     {
-        $data = $e->response->json() ?? [];
+        $data = $e->response->json();
+        $payload = is_array($data) ? $data : [];
 
         throw PrismException::providerRequestErrorWithDetails(
             provider: 'Moonshot',
             statusCode: $e->response->status(),
-            errorType: data_get($data, 'error.type'),
-            errorMessage: data_get($data, 'error.message'),
+            errorType: $this->nullableString(data_get($payload, 'error.type')),
+            errorMessage: $this->nullableString(data_get($payload, 'error.message')),
             previous: $e,
         );
     }
 
+    private function nullableString(mixed $value): ?string
+    {
+        return is_string($value) ? $value : null;
+    }
+
     /**
      * @param  array<string, mixed>  $options
-     * @param  array<mixed>  $retry
+     * @param  array{0: array<int, int>|int, 1?: Closure|int, 2?: ?callable, 3?: bool}|array{}  $retry
      */
     private function client(array $options = [], array $retry = []): PendingRequest
     {
-        return $this->baseClient()
-            ->when($this->apiKey, fn ($client) => $client->withToken($this->apiKey))
-            ->withOptions($options)
-            ->when($retry !== [], fn ($client) => $client->retry(...$retry))
-            ->baseUrl($this->url);
+        $client = $this->baseClient()
+            ->when($this->apiKey !== '', fn (PendingRequest $client): PendingRequest => $client->withToken($this->apiKey))
+            ->withOptions($options);
+
+        if ($retry !== []) {
+            $client = $client->retry(...$retry);
+        }
+
+        return $client->baseUrl($this->url);
     }
 }

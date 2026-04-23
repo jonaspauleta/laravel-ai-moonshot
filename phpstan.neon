@@ -4,12 +4,7 @@ includes:
     - vendor/phpstan/phpstan-phpunit/extension.neon
 
 parameters:
-    # Level 8 (not max) — Moonshot's untyped JSON responses + data_get() returns
-    # mixed everywhere. Mirroring DeepSeek's upstream Prism handlers, which also
-    # rely on data_get(). Bumping to max requires per-field type narrowing or
-    # wholesale ignore lists; level 8 still catches the real bugs (missing types,
-    # offset access on objects, unsafe casts).
-    level: 8
+    level: max
     paths:
         - src
         - tests
@@ -18,6 +13,3 @@ parameters:
         -
             identifier: larastan.noEnvCallsOutsideOfConfig
             path: tests/TestCase.php
-        -
-            identifier: property.notFound
-            path: tests/Feature/*.php

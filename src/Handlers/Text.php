@@ -57,14 +57,14 @@ final class Text
      */
     private function handleToolCalls(array $data, Request $request): TextResponse
     {
-        $toolCalls = ToolCallMap::map(data_get($data, 'choices.0.message.tool_calls', []));
+        $toolCalls = ToolCallMap::map($this->dataList($data, 'choices.0.message.tool_calls'));
 
-        $toolResults = $this->callTools($request->tools(), $toolCalls);
+        $toolResults = array_values($this->callTools($request->tools(), $toolCalls));
 
         $this->addStep($data, $request, $toolResults);
 
         $request = $request->addMessage(new AssistantMessage(
-            data_get($data, 'choices.0.message.content', ''),
+            $this->dataString($data, 'choices.0.message.content'),
             $toolCalls,
             [],
         ));
@@ -103,17 +103,27 @@ final class Text
             'chat/completions',
             array_merge([
                 'model' => $request->model(),
-                'messages' => (new MessageMap($request->messages(), $request->systemPrompts()))(),
+                'messages' => (new MessageMap(
+                    array_values($request->messages()),
+                    array_values($request->systemPrompts()),
+                ))(),
                 'max_tokens' => $request->maxTokens(),
             ], Arr::whereNotNull([
                 'temperature' => $request->temperature(),
                 'top_p' => $request->topP(),
-                'tools' => ToolMap::map($request->tools()) ?: null,
+                'tools' => ToolMap::map(array_values($request->tools())) ?: null,
                 'tool_choice' => ToolChoiceMap::map($request->toolChoice()),
             ])),
         );
 
-        return $response->json();
+        $json = $response->json();
+
+        if (! is_array($json)) {
+            return [];
+        }
+
+        /** @var array<string, mixed> $json */
+        return $json;
     }
 
     /**
@@ -123,18 +133,18 @@ final class Text
     private function addStep(array $data, Request $request, array $toolResults = []): void
     {
         $this->responseBuilder->addStep(new Step(
-            text: data_get($data, 'choices.0.message.content', ''),
+            text: $this->dataString($data, 'choices.0.message.content'),
             finishReason: $this->mapFinishReason($data),
-            toolCalls: ToolCallMap::map(data_get($data, 'choices.0.message.tool_calls', [])),
+            toolCalls: ToolCallMap::map($this->dataList($data, 'choices.0.message.tool_calls')),
             toolResults: $toolResults,
             providerToolCalls: [],
             usage: new Usage(
-                data_get($data, 'usage.prompt_tokens'),
-                data_get($data, 'usage.completion_tokens'),
+                $this->dataInt($data, 'usage.prompt_tokens'),
+                $this->dataInt($data, 'usage.completion_tokens'),
             ),
             meta: new Meta(
-                id: data_get($data, 'id'),
-                model: data_get($data, 'model'),
+                id: $this->dataString($data, 'id'),
+                model: $this->dataString($data, 'model'),
             ),
             messages: $request->messages(),
             systemPrompts: $request->systemPrompts(),

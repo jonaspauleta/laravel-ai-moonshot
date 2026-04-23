@@ -9,7 +9,7 @@ use Prism\Prism\Exceptions\PrismException;
 trait ValidatesResponses
 {
     /**
-     * @param  array<string, mixed>  $data
+     * @param  array<array-key, mixed>  $data
      */
     protected function validateResponse(array $data): void
     {

@@ -54,13 +54,13 @@ it('maps system, user, assistant, and tool messages to OpenAI-compatible payload
         'content' => 'You are concise.',
     ]);
 
-    expect($mapped[1]['role'])->toBe('user');
-    expect($mapped[1]['content'][0])->toBe(['type' => 'text', 'text' => 'Hi']);
+    expect(data_get($mapped, '1.role'))->toBe('user');
+    expect(data_get($mapped, '1.content.0'))->toBe(['type' => 'text', 'text' => 'Hi']);
 
-    expect($mapped[2]['role'])->toBe('assistant');
-    expect($mapped[2]['content'])->toBe('Hello!');
-    expect($mapped[2]['tool_calls'][0]['function']['name'])->toBe('lookup');
-    expect($mapped[2]['tool_calls'][0]['function']['arguments'])->toBe('{"q":"rain"}');
+    expect(data_get($mapped, '2.role'))->toBe('assistant');
+    expect(data_get($mapped, '2.content'))->toBe('Hello!');
+    expect(data_get($mapped, '2.tool_calls.0.function.name'))->toBe('lookup');
+    expect(data_get($mapped, '2.tool_calls.0.function.arguments'))->toBe('{"q":"rain"}');
 
     expect($mapped[3])->toBe([
         'role' => 'tool',

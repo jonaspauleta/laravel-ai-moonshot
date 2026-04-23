@@ -53,7 +53,10 @@ final class Structured
             'chat/completions',
             array_merge([
                 'model' => $request->model(),
-                'messages' => (new MessageMap($request->messages(), $request->systemPrompts()))(),
+                'messages' => (new MessageMap(
+                    array_values($request->messages()),
+                    array_values($request->systemPrompts()),
+                ))(),
                 'max_completion_tokens' => $request->maxTokens(),
                 'response_format' => ['type' => 'json_object'],
             ], Arr::whereNotNull([
@@ -62,7 +65,14 @@ final class Structured
             ])),
         );
 
-        return $response->json();
+        $json = $response->json();
+
+        if (! is_array($json)) {
+            return [];
+        }
+
+        /** @var array<string, mixed> $json */
+        return $json;
     }
 
     /**
@@ -70,21 +80,21 @@ final class Structured
      */
     private function createResponse(Request $request, array $data): StructuredResponse
     {
-        $text = data_get($data, 'choices.0.message.content', '');
+        $text = $this->dataString($data, 'choices.0.message.content');
 
         $responseMessage = new AssistantMessage($text);
         $request->addMessage($responseMessage);
 
         $step = new Step(
             text: $text,
-            finishReason: FinishReasonMap::map(data_get($data, 'choices.0.finish_reason', '')),
+            finishReason: FinishReasonMap::map($this->dataString($data, 'choices.0.finish_reason')),
             usage: new Usage(
-                data_get($data, 'usage.prompt_tokens'),
-                data_get($data, 'usage.completion_tokens'),
+                $this->dataInt($data, 'usage.prompt_tokens'),
+                $this->dataInt($data, 'usage.completion_tokens'),
             ),
             meta: new Meta(
-                id: data_get($data, 'id'),
-                model: data_get($data, 'model'),
+                id: $this->dataString($data, 'id'),
+                model: $this->dataString($data, 'model'),
             ),
             messages: $request->messages(),
             systemPrompts: $request->systemPrompts(),
@@ -101,7 +111,7 @@ final class Structured
     {
         return $request->addMessage(new SystemMessage(sprintf(
             "You MUST respond EXCLUSIVELY with a JSON object that strictly adheres to the following schema. \n Do NOT explain or add other content. Validate your response against this schema \n %s",
-            json_encode($request->schema()->toArray(), JSON_PRETTY_PRINT),
+            (string) json_encode($request->schema()->toArray(), JSON_PRETTY_PRINT),
         )));
     }
 }

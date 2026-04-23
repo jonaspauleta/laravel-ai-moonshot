@@ -24,16 +24,35 @@ final class MoonshotProvider extends Provider implements TextProvider
 
     public function defaultTextModel(): string
     {
-        return $this->config['models']['text']['default'] ?? 'kimi-k2.6';
+        return $this->configuredModel('default', 'kimi-k2.6');
     }
 
     public function cheapestTextModel(): string
     {
-        return $this->config['models']['text']['cheapest'] ?? 'kimi-k2-0905-preview';
+        return $this->configuredModel('cheapest', 'kimi-k2-0905-preview');
     }
 
     public function smartestTextModel(): string
     {
-        return $this->config['models']['text']['smartest'] ?? 'kimi-k2-thinking';
+        return $this->configuredModel('smartest', 'kimi-k2-thinking');
+    }
+
+    private function configuredModel(string $tier, string $default): string
+    {
+        $models = $this->config['models'] ?? null;
+
+        if (! is_array($models)) {
+            return $default;
+        }
+
+        $text = $models['text'] ?? null;
+
+        if (! is_array($text)) {
+            return $default;
+        }
+
+        $value = $text[$tier] ?? null;
+
+        return is_string($value) ? $value : $default;
     }
 }

@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Jonaspauleta\PrismMoonshot\Moonshot;
 use Prism\Prism\Enums\FinishReason;
@@ -15,8 +16,10 @@ beforeEach(function (): void {
 });
 
 it('registers the Moonshot driver with Prism', function (): void {
-    $manager = $this->app->make(PrismManager::class);
+    /** @var PrismManager $manager */
+    $manager = resolve(PrismManager::class);
 
+    /** @var Moonshot $instance */
     $instance = $manager->resolve(Moonshot::KEY, [
         'api_key' => 'test-key',
         'url' => Moonshot::DEFAULT_URL,
@@ -54,13 +57,13 @@ it('generates text from a successful chat completion', function (): void {
     expect($response->usage->completionTokens)->toBe(5);
     expect($response->meta->model)->toBe('kimi-k2.6');
 
-    Http::assertSent(function ($request): bool {
+    Http::assertSent(function (Request $request): bool {
         $body = $request->data();
 
         return $request->url() === 'https://api.moonshot.ai/v1/chat/completions'
             && $request->hasHeader('Authorization', 'Bearer test-key')
-            && $body['model'] === 'kimi-k2.6'
-            && $body['messages'][0]['role'] === 'user';
+            && ($body['model'] ?? null) === 'kimi-k2.6'
+            && (data_get($body, 'messages.0.role')) === 'user';
     });
 });
 
