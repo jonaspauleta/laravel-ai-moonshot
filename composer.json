@@ -1,0 +1,67 @@
+{
+    "name": "jonaspauleta/prism-moonshot",
+    "description": "Moonshot AI (Kimi K2) provider for Prism PHP and Laravel AI SDK.",
+    "keywords": ["prism", "prism-php", "laravel", "laravel-ai", "moonshot", "kimi", "kimi-k2", "ai", "llm"],
+    "homepage": "https://github.com/jonaspauleta/prism-moonshot",
+    "license": "MIT",
+    "type": "library",
+    "authors": [
+        { "name": "João Paulo Santos", "email": "jonaspauleta2@gmail.com", "role": "Developer" }
+    ],
+    "require": {
+        "php": "^8.5",
+        "illuminate/contracts": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/http": "^11.0 || ^12.0 || ^13.0",
+        "illuminate/support": "^11.0 || ^12.0 || ^13.0",
+        "prism-php/prism": "^0.99 || ^0.100"
+    },
+    "require-dev": {
+        "driftingly/rector-laravel": "^2.2",
+        "larastan/larastan": "^3.0",
+        "laravel/ai": "^0.3 || ^0.4 || ^0.5",
+        "laravel/pint": "^1.25",
+        "orchestra/testbench": "^9.0 || ^10.0 || ^11.0",
+        "pestphp/pest": "^3.0 || ^4.0",
+        "pestphp/pest-plugin-laravel": "^3.0 || ^4.0",
+        "phpstan/phpstan-deprecation-rules": "^2.0",
+        "phpstan/phpstan-phpunit": "^2.0",
+        "rector/rector": "^2.2"
+    },
+    "suggest": {
+        "laravel/ai": "Required for agent()->prompt() integration via Laravel AI SDK."
+    },
+    "autoload": {
+        "psr-4": {
+            "Jonaspauleta\\PrismMoonshot\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Jonaspauleta\\PrismMoonshot\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "vendor/bin/pest",
+        "test-coverage": "vendor/bin/pest --coverage",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
+        "format": "vendor/bin/pint",
+        "refactor": "vendor/bin/rector --no-diffs",
+        "quality": [
+            "@refactor",
+            "@format",
+            "@analyse",
+            "@test"
+        ]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": { "pestphp/pest-plugin": true }
+    },
+    "extra": {
+        "laravel": {
+            "providers": ["Jonaspauleta\\PrismMoonshot\\MoonshotServiceProvider"]
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

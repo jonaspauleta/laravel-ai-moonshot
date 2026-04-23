@@ -1,0 +1,24 @@
+{
+    "preset": "laravel",
+    "rules": {
+        "declare_strict_types": true,
+        "final_class": true,
+        "final_internal_class": true,
+        "global_namespace_import": {
+            "import_classes": true,
+            "import_constants": true,
+            "import_functions": true
+        },
+        "nullable_type_declaration_for_default_null_value": true,
+        "ordered_imports": {
+            "sort_algorithm": "alpha"
+        },
+        "single_line_empty_body": true,
+        "strict_comparison": true,
+        "strict_param": true
+    },
+    "exclude": [
+        "vendor",
+        "build"
+    ]
+}
