@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-04-23
+
 ### Added
 
 - Initial Moonshot AI (Kimi K2) provider for Prism PHP.
@@ -16,3 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Image input via OpenAI-compatible `image_url` content parts.
 - Pest 4 + PHPStan level max + Pint + Rector quality pipeline.
 - GitHub Actions workflow.
+
+[Unreleased]: https://github.com/jonaspauleta/prism-moonshot/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/jonaspauleta/prism-moonshot/releases/tag/v0.1.0
