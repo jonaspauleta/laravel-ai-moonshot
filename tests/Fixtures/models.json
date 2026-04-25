@@ -1,0 +1,95 @@
+{
+    "object": "list",
+    "data": [
+        {
+            "id": "kimi-k2.6",
+            "object": "model",
+            "created": 1730000000,
+            "owned_by": "moonshot",
+            "context_length": 262144,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": true
+        },
+        {
+            "id": "kimi-k2.5",
+            "object": "model",
+            "created": 1729000000,
+            "owned_by": "moonshot",
+            "context_length": 262144,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": true
+        },
+        {
+            "id": "moonshot-v1-auto",
+            "object": "model",
+            "created": 1720000000,
+            "owned_by": "moonshot",
+            "context_length": 131072,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-8k",
+            "object": "model",
+            "created": 1700000000,
+            "owned_by": "moonshot",
+            "context_length": 8192,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-32k",
+            "object": "model",
+            "created": 1700000000,
+            "owned_by": "moonshot",
+            "context_length": 32768,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-128k",
+            "object": "model",
+            "created": 1700000000,
+            "owned_by": "moonshot",
+            "context_length": 131072,
+            "supports_image_in": false,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-8k-vision-preview",
+            "object": "model",
+            "created": 1710000000,
+            "owned_by": "moonshot",
+            "context_length": 8192,
+            "supports_image_in": true,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-32k-vision-preview",
+            "object": "model",
+            "created": 1710000000,
+            "owned_by": "moonshot",
+            "context_length": 32768,
+            "supports_image_in": true,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        },
+        {
+            "id": "moonshot-v1-128k-vision-preview",
+            "object": "model",
+            "created": 1710000000,
+            "owned_by": "moonshot",
+            "context_length": 131072,
+            "supports_image_in": true,
+            "supports_video_in": false,
+            "supports_reasoning": false
+        }
+    ]
+}
