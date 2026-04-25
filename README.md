@@ -65,8 +65,8 @@ Register the provider in `config/ai.php`:
         'models' => [
             'text' => [
                 'default'  => 'kimi-k2.6',
-                'cheapest' => 'kimi-k2-0905-preview',
-                'smartest' => 'kimi-k2-thinking',
+                'cheapest' => 'kimi-k2.5',
+                'smartest' => 'kimi-k2.6',
             ],
         ],
     ],
@@ -88,8 +88,8 @@ To make Moonshot the default provider for the whole application:
 | `key`                  | `string` | yes      | —                             | Your Moonshot API key.                                                            |
 | `url`                  | `string` | no       | `https://api.moonshot.ai/v1`  | API base URL. Override for proxies or regional endpoints.                         |
 | `models.text.default`  | `string` | no       | `kimi-k2.6`                   | Used by `Provider::defaultTextModel()`.                                           |
-| `models.text.cheapest` | `string` | no       | `kimi-k2-0905-preview`        | Used by `Provider::cheapestTextModel()` and the `#[UseCheapestModel]` attribute.  |
-| `models.text.smartest` | `string` | no       | `kimi-k2-thinking`            | Used by `Provider::smartestTextModel()` and the `#[UseSmartestModel]` attribute.  |
+| `models.text.cheapest` | `string` | no       | `kimi-k2.5`                   | Used by `Provider::cheapestTextModel()` and the `#[UseCheapestModel]` attribute.  |
+| `models.text.smartest` | `string` | no       | `kimi-k2.6`                   | Used by `Provider::smartestTextModel()` and the `#[UseSmartestModel]` attribute. There is no separate thinking SKU — enable thinking per-call via `providerOptions`. |
 
 ## How it works
 
@@ -240,9 +240,11 @@ $response = agent('Describe the image.')
 
 Supported attachment types: `Base64Image`, `RemoteImage`, `LocalImage`, `StoredImage`, and `Illuminate\Http\UploadedFile` (when the MIME type is `image/jpeg|png|gif|webp`). Document attachments are **not** supported by Moonshot — pass them as text or extract them client-side.
 
-### Thinking mode (Kimi K2 / `kimi-k2-thinking`)
+### Thinking mode
 
-Kimi's `kimi-k2.6` and `kimi-k2-thinking` models expose chain-of-thought through `reasoning_content` deltas. This package surfaces them as standard Laravel AI SDK stream events — `ReasoningStart` → `ReasoningDelta` → `ReasoningEnd` — and guarantees `ReasoningEnd` fires before the first `TextStart`.
+There is no separate thinking model. `kimi-k2.6` and `kimi-k2.5` both expose reasoning via the `thinking` request parameter. The `smartest` tier defaults to `kimi-k2.6` with thinking enabled at call-site via `HasProviderOptions`.
+
+When thinking is enabled, Kimi streams chain-of-thought through `reasoning_content` deltas. This package surfaces them as standard Laravel AI SDK stream events — `ReasoningStart` → `ReasoningDelta` → `ReasoningEnd` — and guarantees `ReasoningEnd` fires before the first `TextStart`.
 
 Pass Moonshot's native `thinking` payload by implementing `HasProviderOptions` on your agent. The gateway merges the array into the request body verbatim:
 
@@ -289,17 +291,19 @@ class ThinkingAgent implements Agent, Conversational, HasProviderOptions, HasToo
 }
 ```
 
-> **Note:** the `keep: 'all'` flag is `kimi-k2.6`-specific. For one-off thinking with `kimi-k2-thinking`, send `['thinking' => ['type' => 'enabled']]`.
+> **Note:** the `keep: 'all'` flag is `kimi-k2.6`-specific. For one-off thinking on `kimi-k2.5`, send `['thinking' => ['type' => 'enabled']]` without `keep`.
 
 ## Models
 
 The defaults track Moonshot's [public model catalog](https://platform.moonshot.ai/docs/api/chat). Override per-tier in `config/ai.php` if Moonshot renames models or you want to pin a specific snapshot.
 
-| Tier      | Default ID                | Used by                                       |
-|-----------|---------------------------|-----------------------------------------------|
-| Default   | `kimi-k2.6`               | `Provider::defaultTextModel()`                |
-| Cheapest  | `kimi-k2-0905-preview`    | `#[UseCheapestModel]`, `cheapestTextModel()`  |
-| Smartest  | `kimi-k2-thinking`        | `#[UseSmartestModel]`, `smartestTextModel()`  |
+| Tier      | Default ID    | Used by                                       |
+|-----------|---------------|-----------------------------------------------|
+| Default   | `kimi-k2.6`   | `Provider::defaultTextModel()`                |
+| Cheapest  | `kimi-k2.5`   | `#[UseCheapestModel]`, `cheapestTextModel()`  |
+| Smartest  | `kimi-k2.6`   | `#[UseSmartestModel]`, `smartestTextModel()`. Same SKU as `default` — Moonshot has no separate thinking model. Enable thinking per-call via `providerOptions(['thinking' => ['type' => 'enabled']])`. |
+
+Run `php artisan ai:moonshot:models` against a configured environment to print the live catalog (model IDs, context length, image/video/reasoning support). Pass `--json` for the raw response.
 
 You can also pass an explicit model per call: `->prompt('...', model: 'kimi-k2.6')`.
 
@@ -339,6 +343,16 @@ composer quality       # rector + pint + phpstan + pest
 ```
 
 CI runs Pint, Rector (dry-run), PHPStan, and Pest on every push and PR — see [`.github/workflows/run-tests.yml`](.github/workflows/run-tests.yml).
+
+## Versioning
+
+This package follows [Semantic Versioning](https://semver.org/), but the upstream `laravel/ai` SDK is still on `0.x` — its minor bumps may include breaking changes. To keep our SemVer promise honest:
+
+- We pin to a specific `laravel/ai` minor: `composer.json` requires `~0.6.3` (allows `0.6.x` patches but **not** `0.7.0`).
+- Each new `laravel/ai` minor (`0.7`, `0.8`, …) lands in this package as **one of our minor releases** (`1.2.0`, `1.3.0`, …) after a compatibility audit.
+- Truly breaking changes here (renaming public classes, removing a public method, dropping a PHP version) bump our **major**.
+
+If `laravel/ai` reaches `1.0.0` we will widen the constraint to `^1.0` and follow standard SemVer ranges.
 
 ## Changelog
 
