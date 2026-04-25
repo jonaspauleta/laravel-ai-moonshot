@@ -7,6 +7,7 @@ namespace Jonaspauleta\LaravelAiMoonshot;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Support\ServiceProvider;
+use Jonaspauleta\LaravelAiMoonshot\Console\Commands\ListModelsCommand;
 use Laravel\Ai\AiManager;
 
 final class MoonshotServiceProvider extends ServiceProvider
@@ -24,5 +25,11 @@ final class MoonshotServiceProvider extends ServiceProvider
                 );
             });
         });
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                ListModelsCommand::class,
+            ]);
+        }
     }
 }
