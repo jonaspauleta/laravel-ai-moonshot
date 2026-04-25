@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-04-25
+
+### Fixed
+
+- `cheapest` and `smartest` default model IDs no longer pointed at non-existent Moonshot SKUs (`kimi-k2-0905-preview` and `kimi-k2-thinking`). Both have been removed from Moonshot's `/v1/models` catalog, so out-of-the-box `#[UseCheapestModel]` / `#[UseSmartestModel]` calls returned HTTP 400.
+
+### Changed
+
+- `cheapest` tier now defaults to `kimi-k2.5`. `smartest` tier now defaults to `kimi-k2.6` — there is no separate thinking SKU; thinking is enabled per-call via `providerOptions(['thinking' => ['type' => 'enabled']])`.
+- Tightened `laravel/ai` constraint from `^0.6.3` to `~0.6.3`. The upstream SDK is on `0.x` and minor bumps may carry breaking changes; we now pin per-minor and re-publish on each upstream minor after a compatibility audit. See the new "Versioning" section in the README for the full policy.
+
+### Added
+
+- `php artisan ai:moonshot:models` artisan command. Hits `GET /v1/models` against the configured Moonshot account and renders a table (`id`, `context_length`, `supports_image_in`, `supports_video_in`, `supports_reasoning`). Pass `--json` for the raw response.
+- Weekly `catalog-drift` GitHub Actions workflow. Polls `GET /v1/models` and opens a labelled issue if any default tier ID disappears from the live catalog. Skips gracefully on forks where the `MOONSHOT_API_KEY` secret is unset.
+- `composer smoke` script (`bin/smoke.php`). Runs three live-API scenarios — one-shot prompt, streaming prompt, tool call — gated by the `MOONSHOT_API_KEY` env var. Not wired into default CI; intended for `workflow_dispatch` and pre-tag verification.
+
 ## [1.1.1] - 2026-04-25
 
 ### Added
@@ -82,6 +99,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
    ],
    ```
 
+[1.1.2]: https://github.com/jonaspauleta/laravel-ai-moonshot/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/jonaspauleta/laravel-ai-moonshot/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jonaspauleta/laravel-ai-moonshot/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/jonaspauleta/laravel-ai-moonshot/releases/tag/v1.0.0
@@ -117,5 +135,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pest 4 + PHPStan level max + Pint + Rector quality pipeline.
 - GitHub Actions workflow.
 
-[Unreleased]: https://github.com/jonaspauleta/laravel-ai-moonshot/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/jonaspauleta/laravel-ai-moonshot/compare/v1.1.2...HEAD
 [0.1.0]: https://github.com/jonaspauleta/laravel-ai-moonshot/releases/tag/v0.1.0
