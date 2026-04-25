@@ -7,7 +7,7 @@ namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Storage;
-use InvalidArgumentException;
+use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedAttachmentException;
 use Laravel\Ai\Files\Base64Image;
 use Laravel\Ai\Files\File;
 use Laravel\Ai\Files\LocalImage;
@@ -26,9 +26,7 @@ trait MapsAttachments
     {
         return $attachments->map(function (mixed $attachment): array {
             if (! $attachment instanceof File && ! $attachment instanceof UploadedFile) {
-                throw new InvalidArgumentException(
-                    'Unsupported attachment type ['.get_debug_type($attachment).']'
-                );
+                throw UnsupportedAttachmentException::for($attachment);
             }
 
             return match (true) {
@@ -54,7 +52,7 @@ trait MapsAttachments
                     'type' => 'image_url',
                     'image_url' => ['url' => 'data:'.$attachment->getClientMimeType().';base64,'.base64_encode((string) $attachment->get())],
                 ],
-                default => throw new InvalidArgumentException('Moonshot does not support document attachments. Only image attachments are supported.'),
+                default => throw UnsupportedAttachmentException::document(),
             };
         })->all();
     }

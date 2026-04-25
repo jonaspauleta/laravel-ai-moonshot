@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedProviderToolException` — thrown when a `Laravel\Ai\Providers\Tools\ProviderTool` subclass is passed to the gateway. Replaces a raw `RuntimeException` with an actionable, type-narrow message.
+- `Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedAttachmentException` (`::for()`, `::document()`) — thrown for unsupported attachment types and document attachments. Replaces raw `InvalidArgumentException`s.
+- CI matrix: PHP 8.3 / 8.4 / 8.5 × Laravel 12 / 13 on every push and pull request.
+- Repository hygiene: `CODE_OF_CONDUCT.md`, GitHub issue forms (bug + feature + config), pull-request template, Dependabot config (composer + github-actions, weekly).
+
+### Changed
+
+- Lowered `php` constraint from `^8.5` to `^8.3` to match upstream `laravel/ai` and `illuminate/*`. PHP 8.5 was over-constrained for a library; CI exercises 8.3, 8.4, and 8.5.
+
+### Fixed
+
+- Removed a `deepseek-reasoner`-specific comment that leaked from the upstream `DeepSeekGateway` template into `ParsesTextResponses::processResponse()`. The replacement text describes Moonshot's actual non-streaming `reasoning_content` behavior.
+
 ## [1.0.0] - 2026-04-24
 
 ### Changed

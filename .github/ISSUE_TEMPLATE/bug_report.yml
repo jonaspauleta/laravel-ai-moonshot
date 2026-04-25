@@ -1,0 +1,76 @@
+name: Bug report
+description: Report a reproducible defect in laravel-ai-moonshot.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much detail as possible so the issue can be reproduced quickly.
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: Output of `composer show jonaspauleta/laravel-ai-moonshot | grep versions`.
+      placeholder: "1.0.0"
+    validations:
+      required: true
+  - type: input
+    id: php-version
+    attributes:
+      label: PHP version
+      placeholder: "8.4.3"
+    validations:
+      required: true
+  - type: input
+    id: laravel-version
+    attributes:
+      label: Laravel version
+      placeholder: "12.x or 13.x"
+    validations:
+      required: true
+  - type: input
+    id: laravel-ai-version
+    attributes:
+      label: laravel/ai version
+      placeholder: "0.6.3"
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Moonshot model
+      description: Model ID passed to the SDK (or default tier used).
+      placeholder: "kimi-k2.6"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: What did you expect to happen, and what actually happened?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Smallest self-contained code snippet that reproduces the issue. Include the agent/prompt code and (where relevant) the `Http::fake()` setup.
+      render: php
+    validations:
+      required: true
+  - type: textarea
+    id: stack-trace
+    attributes:
+      label: Stack trace / error output
+      description: Full exception message + stack trace, or the unexpected output.
+      render: text
+    validations:
+      required: false
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Anything else relevant — proxy setup, custom base URL, queue driver, related logs.
+    validations:
+      required: false

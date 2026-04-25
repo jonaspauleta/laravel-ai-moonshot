@@ -82,9 +82,10 @@ trait ParsesTextResponses
     /**
      * Process a single response, handling tool loops recursively.
      *
-     * Note: deepseek-reasoner responses include a `reasoning_content` field on
-     * each choice's message; it's intentionally ignored here — we only expose
-     * the final `content` text.
+     * Non-streaming Moonshot responses may include a `reasoning_content` field
+     * on the choice message when thinking mode is enabled; it is intentionally
+     * dropped here. Reasoning is surfaced only via the streaming API as
+     * `ReasoningStart` / `ReasoningDelta` / `ReasoningEnd` events.
      *
      * @param  array<string, mixed>  $data
      * @param  array<int, mixed>  $tools

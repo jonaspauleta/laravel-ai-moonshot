@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/jonaspauleta/laravel-ai-moonshot/blob/main/SECURITY.md
+    about: Do NOT open a public issue for security reports. See SECURITY.md for the private disclosure process.
+  - name: Question or discussion
+    url: https://github.com/jonaspauleta/laravel-ai-moonshot/discussions
+    about: For usage questions, design discussions, or anything that is not a bug or feature request.
+  - name: Laravel AI SDK
+    url: https://github.com/laravel/ai
+    about: Issues with the SDK itself (agent dispatch, broadcasting, structured output) belong upstream.

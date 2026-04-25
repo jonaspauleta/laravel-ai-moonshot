@@ -5,10 +5,10 @@ declare(strict_types=1);
 namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
+use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedProviderToolException;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
-use RuntimeException;
 
 trait MapsTools
 {
@@ -24,7 +24,7 @@ trait MapsTools
 
         foreach ($tools as $tool) {
             if ($tool instanceof ProviderTool) {
-                throw new RuntimeException('Moonshot does not support ['.class_basename($tool).'] provider tools.');
+                throw UnsupportedProviderToolException::for($tool);
             }
 
             if ($tool instanceof Tool) {
