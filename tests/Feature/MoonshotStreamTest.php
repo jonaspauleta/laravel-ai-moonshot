@@ -78,11 +78,11 @@ it('streams text deltas from a chat completions SSE response', function (): void
 
 it('emits reasoning events when the model returns reasoning_content deltas', function (): void {
     $sse = sseFromChunks([
-        ['id' => 'x', 'model' => 'kimi-k2-thinking', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant']]]],
-        ['id' => 'x', 'model' => 'kimi-k2-thinking', 'choices' => [['index' => 0, 'delta' => ['reasoning_content' => 'let me think...']]]],
-        ['id' => 'x', 'model' => 'kimi-k2-thinking', 'choices' => [['index' => 0, 'delta' => ['reasoning_content' => ' carefully']]]],
-        ['id' => 'x', 'model' => 'kimi-k2-thinking', 'choices' => [['index' => 0, 'delta' => ['content' => 'Answer']]]],
-        ['id' => 'x', 'model' => 'kimi-k2-thinking', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 4]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['reasoning_content' => 'let me think...']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['reasoning_content' => ' carefully']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['content' => 'Answer']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 4]],
     ]);
 
     Http::fake([
@@ -91,7 +91,7 @@ it('emits reasoning events when the model returns reasoning_content deltas', fun
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText('inv-2', $provider, 'kimi-k2-thinking', null, [new Message('user', 'Hi')]);
+    $generator = $provider->textGateway()->streamText('inv-2', $provider, 'kimi-k2.6', null, [new Message('user', 'Hi')]);
 
     /** @var array<int, StreamEvent> $events */
     $events = iterator_to_array($generator, false);

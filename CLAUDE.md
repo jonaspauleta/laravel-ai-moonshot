@@ -47,9 +47,13 @@ code.
 - **`ReasoningEnd` must fire before the first `TextStart`.** The streaming
   trait tracks `$reasoningStartEmitted` / `$reasoningEndEmitted` for this. If
   you refactor, keep the invariant; there is a feature test asserting the order.
-- **Default model IDs (`kimi-k2.6`, `kimi-k2-0905-preview`, `kimi-k2-thinking`)
-  come from Moonshot's public catalog.** If Moonshot retires one, defaults rot
-  silently and users get HTTP 400. Always allow override via
+- **Default model IDs come from Moonshot's public catalog.** As of v1.1.2:
+  `default` and `smartest` map to `kimi-k2.6`; `cheapest` maps to `kimi-k2.5`.
+  There is no separate "thinking" SKU — thinking is enabled via
+  `providerOptions(['thinking' => ['type' => 'enabled']])`. If Moonshot
+  retires one, defaults rot silently and users get HTTP 400. The weekly
+  `catalog-drift` GitHub workflow polls `GET /v1/models` and opens an issue
+  if any default disappears. Always allow override via
   `config/ai.php` → `providers.moonshot.models.text.{default,cheapest,smartest}`.
 - **`MoonshotGateway::$events` is unused on purpose** (`@phpstan-ignore property.onlyWritten`).
   Kept for parity with upstream `DeepSeekGateway`. If you start emitting events,

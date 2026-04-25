@@ -44,12 +44,12 @@ final class MoonshotProvider extends Provider implements TextProvider
 
     public function cheapestTextModel(): string
     {
-        return $this->configuredModel('cheapest', 'kimi-k2-0905-preview');
+        return $this->configuredModel('cheapest', 'kimi-k2.5');
     }
 
     public function smartestTextModel(): string
     {
-        return $this->configuredModel('smartest', 'kimi-k2-thinking');
+        return $this->configuredModel('smartest', 'kimi-k2.6');
     }
 
     private function configuredModel(string $tier, string $default): string

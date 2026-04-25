@@ -15,6 +15,6 @@ it('returns the kimi k2.6 default model', function (): void {
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
     expect($provider->defaultTextModel())->toBe('kimi-k2.6')
-        ->and($provider->smartestTextModel())->toBe('kimi-k2-thinking')
-        ->and($provider->cheapestTextModel())->toBe('kimi-k2-0905-preview');
+        ->and($provider->smartestTextModel())->toBe('kimi-k2.6')
+        ->and($provider->cheapestTextModel())->toBe('kimi-k2.5');
 });
