@@ -1,0 +1,25 @@
+{
+    "object": "list",
+    "data": [
+        {
+            "id": "file-abc123",
+            "object": "file",
+            "bytes": 4321,
+            "created_at": 1714060800,
+            "filename": "contract.pdf",
+            "purpose": "file-extract",
+            "status": "ready",
+            "status_details": null
+        },
+        {
+            "id": "file-def456",
+            "object": "file",
+            "bytes": 9876,
+            "created_at": 1714061900,
+            "filename": "policy.docx",
+            "purpose": "file-extract",
+            "status": "ready",
+            "status_details": null
+        }
+    ]
+}

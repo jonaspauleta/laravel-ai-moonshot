@@ -15,6 +15,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 - ✅ Streaming responses (`stream()`, `broadcast()`, `broadcastOnQueue()`)
 - ✅ Tool calling (function calling)
 - ✅ Image attachments (base64, remote URL, local file, stored disk, `UploadedFile`)
+- ✅ Document Q&A via Moonshot Files API (PDF, DOC, XLSX, PPTX, …) — server-side OCR + extraction
 - ✅ Kimi **thinking mode** with `reasoning_content` deltas surfaced as `ReasoningStart` / `ReasoningDelta` / `ReasoningEnd` stream events
 - ✅ Multi-turn reasoning persistence (`thinking.keep = all`)
 - ✅ Per-tier model overrides (`default`, `cheapest`, `smartest`)
@@ -238,7 +239,92 @@ $response = agent('Describe the image.')
     );
 ```
 
-Supported attachment types: `Base64Image`, `RemoteImage`, `LocalImage`, `StoredImage`, and `Illuminate\Http\UploadedFile` (when the MIME type is `image/jpeg|png|gif|webp`). Document attachments are **not** supported by Moonshot — pass them as text or extract them client-side.
+Supported attachment types: `Base64Image`, `RemoteImage`, `LocalImage`, `StoredImage`, and `Illuminate\Http\UploadedFile` (when the MIME type is `image/jpeg|png|gif|webp`). Document attachments are **not** supported through the SDK's generic `Document` contract — use the Files API below instead.
+
+### Document Q&A (PDF, DOC, XLSX, …)
+
+Moonshot's `chat/completions` endpoint does **not** accept document attachments. Document Q&A goes through Moonshot's separate Files API at `POST /v1/files`, which performs server-side text extraction (including OCR for scanned PDFs) and returns the extracted text. That text is then injected as a leading prompt block on subsequent chat completions.
+
+Supported formats include `.pdf`, `.txt`, `.csv`, `.doc`, `.docx`, `.xls`, `.xlsx`, `.ppt`, `.pptx`, `.md`, `.json`, `.html`, `.epub`, plus most code/config formats. See Moonshot's [official format list](https://platform.kimi.ai/docs/api/files) for the full catalog.
+
+#### Ergonomic API: `withMoonshotFile()`
+
+Add the `InjectsMoonshotFiles` trait to any agent class that already uses `Promptable`. Implement `HasMiddleware` so the trait's middleware can prepend the extracted document text to the user prompt:
+
+```php
+namespace App\Ai\Agents;
+
+use Jonaspauleta\LaravelAiMoonshot\Concerns\InjectsMoonshotFiles;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasMiddleware;
+use Laravel\Ai\Promptable;
+
+#[Provider('moonshot')]
+final class ContractAnalyst implements Agent, HasMiddleware
+{
+    use Promptable;
+    use InjectsMoonshotFiles;
+
+    public function instructions(): string
+    {
+        return 'You analyze contracts and surface risky clauses.';
+    }
+}
+
+$response = ContractAnalyst::make()
+    ->withMoonshotFile('storage/app/contracts/2026-renewal.pdf')
+    ->withMoonshotFile($uploadedFile, label: 'Refund Policy')
+    ->prompt('What are the riskiest clauses?');
+```
+
+Each `withMoonshotFile()` call uploads the file, fetches its extracted text, and appends a labelled block (`Document: <label>\n<content>`) that the trait's middleware prepends to your next prompt. Call it as many times as you need; ordering is preserved.
+
+If your agent already implements `HasMiddleware` and overrides `middleware()`, alias the trait method and merge:
+
+```php
+use InjectsMoonshotFiles {
+    middleware as moonshotFilesMiddlewareDefault;
+}
+
+public function middleware(): array
+{
+    return [...$this->moonshotFilesMiddlewareDefault(), new MyOtherMiddleware()];
+}
+```
+
+#### Lower-level service: `MoonshotFiles`
+
+When you need control over the file lifecycle (listing, deleting, retrieving extracted content directly), inject the `MoonshotFiles` service:
+
+```php
+use Jonaspauleta\LaravelAiMoonshot\Files\MoonshotFiles;
+
+$files = app(MoonshotFiles::class);
+
+$file = $files->upload('contract.pdf');
+$text = $files->content($file->id);
+
+// Later: list / delete
+foreach ($files->list() as $entry) {
+    $files->delete($entry->id);
+}
+```
+
+Run `php artisan ai:moonshot:files` to inspect uploaded files; `php artisan ai:moonshot:files --delete=<id>` to remove them.
+
+#### Limits
+
+- **1,000 files** per account
+- **100 MB** maximum per file (the service rejects oversize uploads before the network call)
+- **10 GB** total storage across all uploads
+- Extraction is currently free, but rate-limited at peak usage
+
+#### Security: treat document content as untrusted input
+
+Extracted document text is **untrusted user input** — a malicious PDF can attempt prompt injection by mimicking system instructions. The `withMoonshotFile()` ergonomic API mitigates this by prefixing each block with `Document: <label>` so the model can distinguish your trusted instructions from document text.
+
+The official Moonshot documentation injects extracted content as a `system` message. The Laravel AI SDK's `MessageRole` enum has no `system` case (the `instructions()` slot is reserved), so this package prepends the document block to the user prompt instead. The `Document: <label>` framing is what makes the prompt-injection mitigation work — keep the labels meaningful and avoid putting model-controlled strings in them.
 
 ### Thinking mode
 
@@ -318,7 +404,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 - **Embeddings** — Moonshot has no embeddings endpoint.
 - **Image generation, audio, transcription, reranking** — text only.
 - **Provider tools** (`ProviderTool` subclasses such as web search) — throws `RuntimeException` if passed.
-- **Document attachments** — only image attachments are supported.
+- **Document attachments via the SDK's generic `Document` contract** — use `withMoonshotFile()` or the `MoonshotFiles` service instead, which goes through Moonshot's `/v1/files` extraction endpoint (see [Document Q&A](#document-qa-pdf-doc-xlsx-)).
 
 ## Troubleshooting
 
@@ -332,6 +418,9 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 | Structured output returns malformed JSON                                                      | Moonshot does **not** enforce JSON Schema server-side. Validate the response in your app and retry on parse error. See [Caveats](#caveats).               |
 | Streaming hangs on long thinking-mode responses                                               | Default per-request timeout is 60s. Pass `timeout:` to `streamText()` or raise it in the gateway's HTTP client invocation.                                |
 | `Http::fake()` in tests does not intercept the request                                        | Fake key must include the full base URL: `'api.moonshot.ai/v1/chat/completions' => Http::response(...)`. The Laravel HTTP client applies the base URL.    |
+| `MoonshotFilesException: ... extraction failed for [file-...]`                                | Moonshot could not extract text from the uploaded file. Check the file is one of the [supported formats](https://platform.kimi.ai/docs/api/files) and not corrupted. Inspect status via `php artisan ai:moonshot:files`. |
+| `MoonshotFilesException: Moonshot Files API quota exceeded`                                  | You hit the 1,000-files / 10 GB account limit, or per-minute rate limit at peak. Delete unused files via `php artisan ai:moonshot:files --delete=<id>`. |
+| `MoonshotFilesException: File of N bytes exceeds Moonshot Files API limit of 104857600`     | The file is larger than 100 MB. Split it or extract relevant pages client-side before uploading.                                                          |
 
 ## Testing
 

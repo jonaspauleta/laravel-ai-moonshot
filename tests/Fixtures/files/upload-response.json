@@ -1,0 +1,10 @@
+{
+    "id": "file-abc123",
+    "object": "file",
+    "bytes": 4321,
+    "created_at": 1714060800,
+    "filename": "contract.pdf",
+    "purpose": "file-extract",
+    "status": "ready",
+    "status_details": null
+}

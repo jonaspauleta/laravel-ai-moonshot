@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - Unreleased
+
+### Added
+
+- **Moonshot Files API support** for server-side document extraction (PDF, DOC, XLSX, PPTX, code, plain text, EPUB, …). Mirrors Moonshot's official OpenAI-compatible Files endpoints under `/v1/files`.
+- `Jonaspauleta\LaravelAiMoonshot\Files\MoonshotFiles` service — typed wrapper around `POST /v1/files` (multipart upload), `GET /v1/files`, `GET /v1/files/{id}`, `GET /v1/files/{id}/content` (returns plain text), and `DELETE /v1/files/{id}`. Accepts `string` paths, `Illuminate\Http\UploadedFile`, or `SplFileInfo`. Resolves via `app(MoonshotFiles::class)` or constructor injection.
+- `Jonaspauleta\LaravelAiMoonshot\Files\MoonshotFile` readonly DTO and `MoonshotFilePurpose` backed enum (`FileExtract`, `Image`, `Video`, `Batch`). Only `FileExtract` is exposed publicly in v1.2.0; vision purposes remain handled through the chat gateway's image attachment contracts.
+- `Jonaspauleta\LaravelAiMoonshot\Concerns\InjectsMoonshotFiles` trait. Adds `withMoonshotFile(string|UploadedFile|SplFileInfo, ?label)` to any agent class that already uses `Promptable`. Exposes a `moonshotFilesMiddleware()` closure (and a default `middleware()` implementation) that prepends each labelled `Document: <label>\n<content>` block to the user prompt before it reaches the gateway.
+- `php artisan ai:moonshot:files` artisan command. Default invocation renders a table of uploaded files (id, filename, bytes, purpose, status, created_at). `--delete=<id>` (repeatable) deletes one or more files; honours `--no-interaction`.
+- `Jonaspauleta\LaravelAiMoonshot\Exceptions\MoonshotFilesException` with typed static constructors (`uploadFailed`, `extractionFailed`, `notFound`, `quotaExceeded`, `unsupportedSource`, `fileTooLarge`). Translates Moonshot error codes (`invalid_request_error`, `rate_limit_reached_error`, `exceeded_current_quota_error`) into actionable messages.
+- README "Document Q&A" section between the existing "Image attachments" and "Thinking mode" sections, with copy-pasteable trait + service examples, the 1,000-files / 100 MB / 10 GB limits, and a security note on prompt-injection mitigation via document labelling.
+- Three new Troubleshooting rows for extraction failures, quota exhaustion, and the 100 MB upload guard.
+
+### Notes on the Moonshot system-message pattern
+
+Moonshot's official documentation injects extracted text as a `system` message. The Laravel AI SDK's `Laravel\Ai\Messages\MessageRole` enum has only `Assistant` / `User` / `ToolResult` cases — the `system` slot is reserved for the agent's `instructions()`. To stay within the SDK contract without forking it, this package prepends extracted content to the **user prompt** as a labelled `Document: <name>\n<content>` block. The label is what makes the prompt-injection mitigation work; treat document content as untrusted input.
+
 ## [1.1.2] - 2026-04-25
 
 ### Fixed
