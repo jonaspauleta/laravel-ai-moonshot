@@ -28,16 +28,16 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 |---------------------------------------------|-------------------------------------------------|
 | Text generation                             | Supported                                       |
 | Streaming                                   | Supported                                       |
-| Tool calling                                | Supported — function tools only                 |
+| Tool calling                                | Supported — function tools + Moonshot's `$web_search` builtin (via `WebSearch` ProviderTool) |
 | Image input                                 | Supported                                       |
 | Document Q&A                                | Supported via Moonshot Files API                |
 | Thinking mode (Kimi reasoning)              | Supported                                       |
 | Structured output                           | Best-effort — JSON mode, validate manually      |
-| Provider tools (web search, etc.)           | Not supported                                   |
+| Provider tools (file search, web fetch, …)  | Not supported (web search supported separately) |
 | Embeddings                                  | Not supported                                   |
 | Image generation / audio / transcription / reranking | Not supported                          |
 
-> **Limitations:** no embeddings, no image generation, no audio/transcription/reranking, no provider-hosted tools, and documents must use the Moonshot Files API (`withMoonshotFile()` / `MoonshotFiles`) instead of Laravel AI generic `Document` attachments. See [Not supported](#not-supported) for details.
+> **Limitations:** no embeddings, no image generation, no audio/transcription/reranking, no provider-hosted tools other than Moonshot's `$web_search` builtin (see [Web search](#web-search)), and documents must use the Moonshot Files API (`withMoonshotFile()` / `MoonshotFiles`) instead of Laravel AI generic `Document` attachments. See [Not supported](#not-supported) for details.
 
 > **Package maturity:** this package tracks the evolving `laravel/ai` SDK, which is still on `0.x`. New `laravel/ai` minor versions are adopted only after a compatibility review and ship as a minor release here. See [Versioning](#versioning).
 
@@ -277,6 +277,28 @@ $response = agent(
 )->prompt('What is the weather in Lisbon?', provider: 'moonshot');
 ```
 
+### Web search
+
+Moonshot ships a server-side web search builtin (`$web_search`) that you can drop into any Moonshot agent by passing the SDK's generic `Laravel\Ai\Providers\Tools\WebSearch` provider tool. The gateway translates it to Moonshot's `builtin_function` payload and auto-replies to the model's `$web_search` tool_call with the model's own arguments — Kimi runs the actual search server-side.
+
+```php
+use function Laravel\Ai\agent;
+use Laravel\Ai\Providers\Tools\WebSearch;
+
+$response = agent(
+    instructions: 'Cite the sources you find on the web.',
+    tools: [new WebSearch],
+)->prompt('Latest F1 driver standings.', provider: 'moonshot');
+```
+
+Streaming works the same way — the `$web_search` round-trip emits a `ToolCall` event followed by a `ToolResult` event whose `result` is the echoed argument JSON.
+
+> **Caveats**
+>
+> - The SDK's `WebSearch` knobs — `maxSearches`, `allowedDomains`, `location()` — are silently dropped. Kimi exposes no client-side configuration for the builtin.
+> - Other `ProviderTool` subclasses (`WebFetch`, `FileSearch`, …) still throw `UnsupportedProviderToolException`. Moonshot has no equivalent builtins.
+> - See the [Kimi web search guide](https://platform.kimi.ai/docs/guide/use-web-search) for billing and rate-limit details — `$web_search` invocations consume search-count tokens on top of normal completion usage.
+
 ### Image attachments
 
 ```php
@@ -455,7 +477,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 
 - **Embeddings** — Moonshot has no embeddings endpoint.
 - **Image generation, audio, transcription, reranking** — text only.
-- **Provider tools** (`ProviderTool` subclasses such as web search) — throws `RuntimeException` if passed.
+- **Provider tools** other than `WebSearch` (e.g. `WebFetch`, `FileSearch`) — throws `UnsupportedProviderToolException` if passed. `WebSearch` itself is supported via Moonshot's `$web_search` builtin (see [Web search](#web-search)).
 - **Document attachments via the SDK's generic `Document` contract** — use `withMoonshotFile()` or the `MoonshotFiles` service instead, which goes through Moonshot's `/v1/files` extraction endpoint (see [Document Q&A](#document-qa-pdf-doc-xlsx-)).
 
 ## Troubleshooting
@@ -465,7 +487,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 | `Driver [moonshot] is not supported.`                                                          | `MoonshotServiceProvider` did not boot. Ensure auto-discovery is on, or register manually in `config/app.php` `providers`.                                |
 | HTTP 401 `Invalid API key`                                                                     | `MOONSHOT_API_KEY` missing or wrong. Verify with `dd(config('ai.providers.moonshot.key'))` after a `php artisan config:clear`.                            |
 | HTTP 400 `model not found` for `kimi-k2.6` (or any default tier)                               | Moonshot renamed or retired the default. Pin a working model under `config/ai.php` `providers.moonshot.models.text.{default,cheapest,smartest}`.          |
-| `RuntimeException: Provider tools are not supported by Moonshot.`                              | You passed a `ProviderTool` subclass (e.g. web search). Use plain function tools or remove the provider tool.                                             |
+| `UnsupportedProviderToolException: Moonshot does not support [WebFetch] provider tools.`       | You passed an unsupported `ProviderTool` subclass (e.g. `WebFetch`, `FileSearch`). For web search use `Laravel\Ai\Providers\Tools\WebSearch` (mapped to Moonshot's `$web_search` builtin). For everything else, use plain function tools. |
 | Document attachment via SDK's generic `Document` is silently ignored or rejected               | Generic `Document` attachments are intentionally unsupported. Use `withMoonshotFile()` (or the `MoonshotFiles` service) — this routes through Moonshot's Files API, which performs server-side extraction. See [Document Q&A](#document-qa-pdf-doc-xlsx-). |
 | Structured output returns malformed JSON                                                      | Moonshot does **not** enforce JSON Schema server-side. Validate the response in your app and retry on parse error. See [Caveats](#caveats).               |
 | Streaming hangs on long thinking-mode responses                                               | Default per-request timeout is 60s. Pass `timeout:` to `streamText()` or raise it in the gateway's HTTP client invocation.                                |

@@ -5,6 +5,28 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-04-27
+
+### Added
+
+- Support Moonshot's server-side `$web_search` builtin. The SDK's generic
+  `Laravel\Ai\Providers\Tools\WebSearch` ProviderTool is mapped to
+  `{"type":"builtin_function","function":{"name":"$web_search"}}` and the
+  resulting `$web_search` tool_calls are auto-replied with the model's own
+  arguments (per the Kimi protocol — Moonshot runs the actual search
+  server-side). Works for both non-streaming and streaming paths.
+  See https://platform.kimi.ai/docs/guide/use-web-search.
+
+### Notes
+
+- `WebSearch` client-side knobs (`maxSearches`, `allowedDomains`, location
+  fields) are silently dropped — Kimi exposes no client-side configuration
+  for the builtin.
+- All other `ProviderTool` subclasses (e.g. `WebFetch`, `FileSearch`)
+  continue to throw `UnsupportedProviderToolException`.
+
+[1.0.1]: https://github.com/jonaspauleta/laravel-ai-moonshot/releases/tag/v1.0.1
+
 ## [1.0.0] - 2026-04-25
 
 Initial public release.

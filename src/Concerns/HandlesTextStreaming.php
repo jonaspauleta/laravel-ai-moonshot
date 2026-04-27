@@ -286,21 +286,25 @@ trait HandlesTextStreaming
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            $tool = $this->findTool($toolCall->name, $tools);
+            if ($toolCall->name === self::MOONSHOT_WEB_SEARCH) {
+                $toolResult = $this->buildBuiltinWebSearchResult($toolCall);
+            } else {
+                $tool = $this->findTool($toolCall->name, $tools);
 
-            if ($tool === null) {
-                continue;
+                if ($tool === null) {
+                    continue;
+                }
+
+                $result = $this->executeTool($tool, $toolCall->arguments);
+
+                $toolResult = new ToolResult(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    $result,
+                    $toolCall->resultId,
+                );
             }
-
-            $result = $this->executeTool($tool, $toolCall->arguments);
-
-            $toolResult = new ToolResult(
-                $toolCall->id,
-                $toolCall->name,
-                $toolCall->arguments,
-                $result,
-                $toolCall->resultId,
-            );
 
             $toolResults[] = $toolResult;
 

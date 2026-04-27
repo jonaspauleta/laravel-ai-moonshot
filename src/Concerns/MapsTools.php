@@ -9,11 +9,24 @@ use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedProviderToolException;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
+use Laravel\Ai\Providers\Tools\WebSearch;
 
 trait MapsTools
 {
     /**
+     * Name of Moonshot's server-side web search builtin function.
+     *
+     * @see https://platform.kimi.ai/docs/guide/use-web-search
+     */
+    public const string MOONSHOT_WEB_SEARCH = '$web_search';
+
+    /**
      * Map the given tools to Chat Completions function definitions.
+     *
+     * `WebSearch` provider tools are translated to Moonshot's `$web_search`
+     * builtin_function. Note that the SDK's `WebSearch` knobs (`maxSearches`,
+     * `allowedDomains`, location fields) are silently dropped — Kimi exposes
+     * no client-side configuration for the builtin search.
      *
      * @param  array<int, mixed>  $tools
      * @return array<int, array<string, mixed>>
@@ -23,6 +36,12 @@ trait MapsTools
         $mapped = [];
 
         foreach ($tools as $tool) {
+            if ($tool instanceof WebSearch) {
+                $mapped[] = $this->mapBuiltinWebSearch();
+
+                continue;
+            }
+
             if ($tool instanceof ProviderTool) {
                 throw UnsupportedProviderToolException::for($tool);
             }
@@ -33,6 +52,21 @@ trait MapsTools
         }
 
         return $mapped;
+    }
+
+    /**
+     * Map the SDK's WebSearch ProviderTool to Moonshot's builtin_function form.
+     *
+     * @return array<string, mixed>
+     */
+    protected function mapBuiltinWebSearch(): array
+    {
+        return [
+            'type' => 'builtin_function',
+            'function' => [
+                'name' => self::MOONSHOT_WEB_SEARCH,
+            ],
+        ];
     }
 
     /**
