@@ -82,16 +82,18 @@ trait ParsesTextResponses
     /**
      * Process a single response, handling tool loops recursively.
      *
-     * Non-streaming Moonshot responses may include a `reasoning_content` field
-     * on the choice message when thinking mode is enabled; it is intentionally
-     * dropped here. Reasoning is surfaced only via the streaming API as
-     * `ReasoningStart` / `ReasoningDelta` / `ReasoningEnd` events.
+     * `$assistantReasoning` holds the per-assistant-message `reasoning_content`
+     * captured from non-streaming Moonshot responses (Kimi thinking mode). It
+     * must be echoed back on the follow-up request whenever `thinking.type`
+     * is enabled, otherwise Moonshot returns a 400 with
+     * `reasoning_content is missing in assistant tool call message`.
      *
      * @param  array<string, mixed>  $data
      * @param  array<int, mixed>  $tools
      * @param  array<string, mixed>|null  $schema
      * @param  Collection<int, Step>  $steps
      * @param  Collection<int, Message>  $messages
+     * @param  Collection<int, string>  $assistantReasoning
      * @param  array<int, mixed>  $originalMessages
      */
     protected function processResponse(
@@ -108,7 +110,10 @@ trait ParsesTextResponses
         ?int $maxSteps = null,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?Collection $assistantReasoning = null,
     ): TextResponse {
+        $assistantReasoning ??= new Collection;
+
         /** @var array<int, mixed> $choices */
         $choices = is_array($data['choices'] ?? null) ? $data['choices'] : [];
         /** @var array<string, mixed> $choice */
@@ -118,6 +123,7 @@ trait ParsesTextResponses
         $model = is_string($data['model'] ?? null) ? $data['model'] : '';
 
         $text = is_string($message['content'] ?? null) ? $message['content'] : '';
+        $reasoning = is_string($message['reasoning_content'] ?? null) ? $message['reasoning_content'] : '';
         /** @var array<int, array<string, mixed>> $rawToolCalls */
         $rawToolCalls = is_array($message['tool_calls'] ?? null) ? $message['tool_calls'] : [];
         $usage = $this->extractUsage($data);
@@ -151,6 +157,7 @@ trait ParsesTextResponses
         $assistantMessage = new AssistantMessage($text, collect($mappedToolCalls));
 
         $messages->push($assistantMessage);
+        $assistantReasoning->push($reasoning);
 
         if ($finishReason === FinishReason::ToolCalls &&
             filled($mappedToolCalls) &&
@@ -189,6 +196,7 @@ trait ParsesTextResponses
                 $maxSteps,
                 $options,
                 $timeout,
+                $assistantReasoning,
             );
         }
 
@@ -286,6 +294,7 @@ trait ParsesTextResponses
      * @param  Collection<int, Step>  $steps
      * @param  Collection<int, Message>  $messages
      * @param  array<int, mixed>  $originalMessages
+     * @param  Collection<int, string>  $assistantReasoning
      */
     protected function continueWithToolResults(
         string $model,
@@ -301,11 +310,16 @@ trait ParsesTextResponses
         ?int $maxSteps,
         ?TextGenerationOptions $options = null,
         ?int $timeout = null,
+        ?Collection $assistantReasoning = null,
     ): TextResponse {
+        $assistantReasoning ??= new Collection;
+
         $chatMessages = $this->mapMessagesToChat(
             $originalMessages,
             $this->composeInstructions($instructions, $schema),
         );
+
+        $assistantIndex = 0;
 
         foreach ($messages as $msg) {
             if ($msg instanceof AssistantMessage) {
@@ -315,6 +329,14 @@ trait ParsesTextResponses
                 if (filled($msg->content)) {
                     $mapped['content'] = $msg->content;
                 }
+
+                $reasoning = $assistantReasoning->get($assistantIndex);
+
+                if (is_string($reasoning) && filled($reasoning)) {
+                    $mapped['reasoning_content'] = $reasoning;
+                }
+
+                $assistantIndex++;
 
                 if ($msg->toolCalls->isNotEmpty()) {
                     /** @var Collection<int, ToolCall> $toolCalls */
@@ -395,6 +417,7 @@ trait ParsesTextResponses
             $maxSteps,
             $options,
             $timeout,
+            $assistantReasoning,
         );
     }
 

@@ -5,6 +5,21 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2026-05-04
+
+### Fixed
+
+- Echo the assistant's `reasoning_content` back on tool-call follow-up
+  requests when Kimi `thinking` mode is enabled. Without this, multi-turn
+  flows that involve any tool call (including the built-in `$web_search`)
+  failed with `400 invalid_request_error: thinking is enabled but
+  reasoning_content is missing in assistant tool call message at index N`.
+  The fix accumulates `reasoning_content` deltas during streaming (and
+  reads `message.reasoning_content` from non-streaming responses), then
+  attaches it to the assistant message that holds the `tool_calls` on the
+  follow-up POST. No-op when `thinking` is disabled or no reasoning was
+  produced.
+
 ## [1.0.1] - 2026-04-27
 
 ### Added

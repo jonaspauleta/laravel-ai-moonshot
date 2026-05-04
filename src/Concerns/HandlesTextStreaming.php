@@ -59,6 +59,7 @@ trait HandlesTextStreaming
         $reasoningEndEmitted = false;
         $reasoningId = '';
         $currentText = '';
+        $currentReasoning = '';
         /** @var array<int|string, array{id: string, name: string, arguments: string}> $pendingToolCalls */
         $pendingToolCalls = [];
         $usage = null;
@@ -123,6 +124,8 @@ trait HandlesTextStreaming
                         time(),
                     )->withInvocationId($invocationId);
                 }
+
+                $currentReasoning .= $delta['reasoning_content'];
 
                 yield new ReasoningDelta(
                     $this->generateEventId(),
@@ -238,6 +241,7 @@ trait HandlesTextStreaming
                 $options,
                 $mappedToolCalls,
                 $currentText,
+                $currentReasoning,
                 $instructions,
                 $originalMessages,
                 $depth,
@@ -275,6 +279,7 @@ trait HandlesTextStreaming
         ?TextGenerationOptions $options,
         array $mappedToolCalls,
         string $currentText,
+        string $currentReasoning,
         ?string $instructions,
         array $originalMessages,
         int $depth,
@@ -323,6 +328,10 @@ trait HandlesTextStreaming
 
             if (filled($currentText)) {
                 $assistantMsg['content'] = $currentText;
+            }
+
+            if (filled($currentReasoning)) {
+                $assistantMsg['reasoning_content'] = $currentReasoning;
             }
 
             $assistantMsg['tool_calls'] = array_map(
