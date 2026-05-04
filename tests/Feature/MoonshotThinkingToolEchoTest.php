@@ -22,6 +22,7 @@ final class ThinkingOptions extends TextGenerationOptions
     /**
      * @return array<string, mixed>
      */
+    #[Override]
     public function providerOptions(Lab|string $provider): array
     {
         return [
@@ -108,15 +109,7 @@ it('echoes reasoning_content on the assistant tool_call message in the non-strea
         /** @var array<string, mixed> $body */
         $body = $request->data();
         $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
-
-        $assistantToolCallTurn = null;
-
-        foreach ($messages as $msg) {
-            if (is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls'])) {
-                $assistantToolCallTurn = $msg;
-                break;
-            }
-        }
+        $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
         if ($assistantToolCallTurn === null) {
             return false;
@@ -170,15 +163,7 @@ it('echoes reasoning_content on the assistant tool_call message in the streaming
         /** @var array<string, mixed> $body */
         $body = $request->data();
         $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
-
-        $assistantToolCallTurn = null;
-
-        foreach ($messages as $msg) {
-            if (is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls'])) {
-                $assistantToolCallTurn = $msg;
-                break;
-            }
-        }
+        $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
         if ($assistantToolCallTurn === null) {
             return false;
