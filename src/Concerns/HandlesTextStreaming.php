@@ -291,8 +291,8 @@ trait HandlesTextStreaming
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            if ($toolCall->name === self::MOONSHOT_WEB_SEARCH) {
-                $toolResult = $this->buildBuiltinWebSearchResult($toolCall);
+            if (in_array($toolCall->name, $this->moonshotBuiltinNames(), true)) {
+                $toolResult = $this->buildBuiltinFunctionResult($toolCall);
             } else {
                 $tool = $this->findTool($toolCall->name, $tools);
 

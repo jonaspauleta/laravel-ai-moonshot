@@ -239,8 +239,8 @@ trait ParsesTextResponses
         $results = [];
 
         foreach ($toolCalls as $toolCall) {
-            if ($toolCall->name === self::MOONSHOT_WEB_SEARCH) {
-                $results[] = $this->buildBuiltinWebSearchResult($toolCall);
+            if (in_array($toolCall->name, $this->moonshotBuiltinNames(), true)) {
+                $results[] = $this->buildBuiltinFunctionResult($toolCall);
 
                 continue;
             }
@@ -266,14 +266,15 @@ trait ParsesTextResponses
     }
 
     /**
-     * Build the echoed ToolResult required by Moonshot's `$web_search` protocol.
+     * Build the echoed ToolResult required by Moonshot's builtin function protocol.
      *
-     * Per Kimi spec the client must reply to a `$web_search` tool_call with the
-     * same arguments JSON-encoded as content; the search itself runs server-side.
+     * Per Kimi spec the client must reply to a builtin tool_call (`$web_search`,
+     * `$convert`, `$fetch`) with the same arguments JSON-encoded as content; the
+     * tool itself runs server-side.
      *
-     * @see https://platform.kimi.ai/docs/guide/use-web-search
+     * @see https://platform.kimi.ai/docs/guide/use-official-tools
      */
-    protected function buildBuiltinWebSearchResult(ToolCall $toolCall): ToolResult
+    protected function buildBuiltinFunctionResult(ToolCall $toolCall): ToolResult
     {
         $encoded = json_encode($toolCall->arguments);
 

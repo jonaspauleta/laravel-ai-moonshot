@@ -5,6 +5,31 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-05-07
+
+### Added
+
+- Support Moonshot's server-side `$convert` and `$fetch` builtins. New
+  `Jonaspauleta\LaravelAiMoonshot\Providers\Tools\Convert` and `Fetch`
+  ProviderTool subclasses are mapped to
+  `{"type":"builtin_function","function":{"name":"$convert"}}` and `"$fetch"`
+  respectively, mirroring the existing `$web_search` plumbing. Tool calls
+  for these names are auto-replied with the model's own arguments per the
+  Kimi protocol — Moonshot runs the actual conversion / fetch server-side.
+  Works for both non-streaming and streaming paths.
+  See https://platform.kimi.ai/docs/guide/use-official-tools.
+
+### Changed
+
+- Renamed protected helpers `mapBuiltinWebSearch()` → `mapBuiltinFunction(string $name)`
+  and `buildBuiltinWebSearchResult()` → `buildBuiltinFunctionResult()` to
+  reflect the generalised builtin handling. Subclassers calling these
+  directly must update call sites.
+- Introduced `moonshotBuiltinName(mixed $tool)` and `moonshotBuiltinNames()`
+  protected helpers on the `MapsTools` trait — resolves the builtin function
+  name for a ProviderTool, or returns the full list of recognised builtin
+  names. Streaming and non-streaming paths share the same recognition logic.
+
 ## [1.0.3] - 2026-05-04
 
 ### Changed
