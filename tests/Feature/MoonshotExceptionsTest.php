@@ -7,7 +7,9 @@ use Illuminate\Support\Collection;
 use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedAttachmentException;
 use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedProviderToolException;
 use Jonaspauleta\LaravelAiMoonshot\MoonshotGateway;
+use Laravel\Ai\AiManager;
 use Laravel\Ai\Files\Base64Document;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\WebFetch;
 
 function gateway(): MoonshotGateway
@@ -33,7 +35,10 @@ function callProtected(MoonshotGateway $gateway, string $method, mixed ...$args)
 it('throws UnsupportedProviderToolException when a non-supported ProviderTool is passed to mapTools', function (): void {
     $gateway = gateway();
 
-    expect(fn (): mixed => callProtected($gateway, 'mapTools', [new WebFetch]))
+    /** @var Provider $provider */
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
+    expect(fn (): mixed => callProtected($gateway, 'mapTools', [new WebFetch], $provider))
         ->toThrow(
             UnsupportedProviderToolException::class,
             'Moonshot does not support [WebFetch] provider tools.',

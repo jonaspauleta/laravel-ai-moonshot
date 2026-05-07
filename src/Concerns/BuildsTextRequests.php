@@ -28,6 +28,7 @@ trait BuildsTextRequests
         array $tools,
         ?array $schema,
         ?TextGenerationOptions $options,
+        ?int $timeout = null,
     ): array {
         $body = [
             'model' => $model,
@@ -38,7 +39,7 @@ trait BuildsTextRequests
         ];
 
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
+            $mappedTools = $this->mapTools($tools, $provider, $timeout);
 
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';
