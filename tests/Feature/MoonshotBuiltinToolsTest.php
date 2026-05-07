@@ -51,9 +51,9 @@ it('maps each Moonshot builtin ProviderTool to the matching builtin_function ent
         ],
     ]);
 })->with([
-    'WebSearch' => [fn (): \Laravel\Ai\Providers\Tools\WebSearch => new WebSearch, '$web_search'],
-    'Convert' => [fn (): \Jonaspauleta\LaravelAiMoonshot\Providers\Tools\Convert => new Convert, '$convert'],
-    'Fetch' => [fn (): \Jonaspauleta\LaravelAiMoonshot\Providers\Tools\Fetch => new Fetch, '$fetch'],
+    'WebSearch' => [fn (): WebSearch => new WebSearch, '$web_search'],
+    'Convert' => [fn (): Convert => new Convert, '$convert'],
+    'Fetch' => [fn (): Fetch => new Fetch, '$fetch'],
 ]);
 
 it('echoes builtin arguments back as ToolResult content', function (string $name): void {
