@@ -24,6 +24,7 @@ final class MoonshotGateway implements TextGateway
     use Concerns\MapsMessages;
     use Concerns\MapsTools;
     use Concerns\ParsesTextResponses;
+    use Concerns\ResolvesFormulaTools;
     use HandlesFailoverErrors;
     use InvokesTools;
     use ParsesServerSentEvents;
@@ -60,6 +61,8 @@ final class MoonshotGateway implements TextGateway
         // contract is TextProvider. Every real TextProvider extends Provider.
         assert($provider instanceof Provider);
 
+        $this->resetFormulaState();
+
         $body = $this->buildTextRequestBody(
             $provider,
             $model,
@@ -68,6 +71,7 @@ final class MoonshotGateway implements TextGateway
             $tools,
             $schema,
             $options,
+            $timeout,
         );
 
         $response = $this->withErrorHandling(
@@ -115,6 +119,8 @@ final class MoonshotGateway implements TextGateway
         // class so the traits (which mirror Laravel's own gateway traits) type-check.
         assert($provider instanceof Provider);
 
+        $this->resetFormulaState();
+
         $body = $this->buildTextRequestBody(
             $provider,
             $model,
@@ -123,6 +129,7 @@ final class MoonshotGateway implements TextGateway
             $tools,
             $schema,
             $options,
+            $timeout,
         );
 
         $body['stream'] = true;

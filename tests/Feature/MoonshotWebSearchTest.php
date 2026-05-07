@@ -9,6 +9,7 @@ use Jonaspauleta\LaravelAiMoonshot\MoonshotGateway;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\WebSearch;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
@@ -60,8 +61,11 @@ function callWebSearchProtected(MoonshotGateway $gateway, string $method, mixed 
 it('maps WebSearch ProviderTool to Moonshot $web_search builtin_function', function (): void {
     $gateway = webSearchGateway();
 
+    /** @var Provider $provider */
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
     /** @var array<int, array<string, mixed>> $mapped */
-    $mapped = callWebSearchProtected($gateway, 'mapTools', [new WebSearch]);
+    $mapped = callWebSearchProtected($gateway, 'mapTools', [new WebSearch], $provider);
 
     expect($mapped)->toBe([
         [
@@ -76,6 +80,9 @@ it('maps WebSearch ProviderTool to Moonshot $web_search builtin_function', funct
 it('echoes $web_search arguments as ToolResult content in non-streaming path', function (): void {
     $gateway = webSearchGateway();
 
+    /** @var Provider $provider */
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
     $toolCall = new ToolCall(
         id: 'call_1',
         name: '$web_search',
@@ -84,7 +91,7 @@ it('echoes $web_search arguments as ToolResult content in non-streaming path', f
     );
 
     /** @var array<int, ToolResult> $results */
-    $results = callWebSearchProtected($gateway, 'executeToolCalls', [$toolCall], []);
+    $results = callWebSearchProtected($gateway, 'executeToolCalls', [$toolCall], [], $provider);
 
     expect($results)->toHaveCount(1);
     expect($results[0]->name)->toBe('$web_search');

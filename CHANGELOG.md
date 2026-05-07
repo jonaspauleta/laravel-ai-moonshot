@@ -5,6 +5,47 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-05-07
+
+### Added
+
+- Formula tool support for `Convert` and `Fetch`. Both classes now extend the new
+  `MoonshotFormulaTool` abstract base (instead of bare `ProviderTool`). When either
+  is passed to an Agent's tool list the gateway fetches live function tool definitions
+  from `GET /formulas/<uri>/tools` and registers them with the chat completions `tools`
+  array as ordinary `{type: "function", ...}` entries. When the model emits a tool_call
+  for one of those names the gateway executes it via `POST /formulas/<uri>/fibers` and
+  forwards the `context.output` string back as the ToolResult content. Works for both
+  non-streaming and streaming paths.
+- New `src/Providers/Tools/MoonshotFormulaTool.php` abstract base class. Subclasses
+  declare `formulaUri(): string` to identify the Moonshot Formulas API resource (e.g.
+  `"moonshot/convert:latest"`). Ready to be extended for future Moonshot formula tools
+  (memory, code_runner, etc.) without any gateway changes.
+- New `src/Concerns/ResolvesFormulaTools.php` trait added to `MoonshotGateway`. Provides
+  per-request in-memory caching of formula tool definitions (prevents duplicate GETs),
+  a name → URI registry for tool call dispatch, and the `fetchFormulaToolDefinitions` /
+  `executeFormulaTool` helpers.
+
+### Changed
+
+- `Convert` and `Fetch` now extend `MoonshotFormulaTool` instead of `ProviderTool`
+  directly. Agent authors using `new Convert` / `new Fetch` will see no API change,
+  but the wire format changes: tool calls are dispatched via the Formulas fibers
+  endpoint instead of being echoed back as builtin_function results.
+  **BC break for direct subclassers of `Convert` / `Fetch`** — if you subclassed
+  either class, extend `MoonshotFormulaTool` and implement `formulaUri()` instead.
+- `MapsTools::mapTools()` now requires a `Provider $provider` and optional
+  `?int $timeout` argument (previously just `array $tools`). Internal callers
+  (including test helpers using Closure rebinding) must be updated.
+- `ParsesTextResponses::executeToolCalls()` now requires `Provider $provider` and
+  optional `?int $timeout` for formula tool dispatch.
+- Removed `MOONSHOT_CONVERT` and `MOONSHOT_FETCH` constants from `MapsTools`.
+  Only `MOONSHOT_WEB_SEARCH` remains.
+- `moonshotBuiltinNames()` now returns only `['$web_search']`; `$convert` and
+  `$fetch` are no longer in the list.
+- Formula tool state is reset at the start of every `generateText()` and
+  `streamText()` call, making the gateway safe under Octane's shared-instance model.
+
 ## [1.1.0] - 2026-05-07
 
 ### Added

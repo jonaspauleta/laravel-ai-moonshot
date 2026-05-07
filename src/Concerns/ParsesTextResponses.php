@@ -165,7 +165,7 @@ trait ParsesTextResponses
             /** @var array<int, Tool> $filteredTools */
             $filteredTools = array_values(array_filter($tools, static fn ($t): bool => $t instanceof Tool));
 
-            $toolResults = $this->executeToolCalls($mappedToolCalls, $filteredTools);
+            $toolResults = $this->executeToolCalls($mappedToolCalls, $filteredTools, $provider, $timeout);
 
             $steps->pop();
 
@@ -233,14 +233,36 @@ trait ParsesTextResponses
      * @param  array<int, Tool>  $tools
      * @return array<int, ToolResult>
      */
-    protected function executeToolCalls(array $toolCalls, array $tools): array
+    protected function executeToolCalls(array $toolCalls, array $tools, Provider $provider, ?int $timeout = null): array
     {
         /** @var array<int, ToolResult> $results */
         $results = [];
 
         foreach ($toolCalls as $toolCall) {
-            if (in_array($toolCall->name, $this->moonshotBuiltinNames(), true)) {
+            if ($toolCall->name === self::MOONSHOT_WEB_SEARCH) {
                 $results[] = $this->buildBuiltinFunctionResult($toolCall);
+
+                continue;
+            }
+
+            $formulaUri = $this->formulaToolUriFor($toolCall->name);
+
+            if ($formulaUri !== null) {
+                $output = $this->executeFormulaTool(
+                    $provider,
+                    $formulaUri,
+                    $toolCall->name,
+                    (string) json_encode($toolCall->arguments),
+                    $timeout,
+                );
+
+                $results[] = new ToolResult(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    $output,
+                    $toolCall->resultId,
+                );
 
                 continue;
             }
@@ -368,7 +390,7 @@ trait ParsesTextResponses
         ];
 
         if (filled($tools)) {
-            $mappedTools = $this->mapTools($tools);
+            $mappedTools = $this->mapTools($tools, $provider, $timeout);
 
             if (filled($mappedTools)) {
                 $body['tool_choice'] = 'auto';

@@ -291,8 +291,24 @@ trait HandlesTextStreaming
         $toolResults = [];
 
         foreach ($mappedToolCalls as $toolCall) {
-            if (in_array($toolCall->name, $this->moonshotBuiltinNames(), true)) {
+            if ($toolCall->name === self::MOONSHOT_WEB_SEARCH) {
                 $toolResult = $this->buildBuiltinFunctionResult($toolCall);
+            } elseif (($formulaUri = $this->formulaToolUriFor($toolCall->name)) !== null) {
+                $output = $this->executeFormulaTool(
+                    $provider,
+                    $formulaUri,
+                    $toolCall->name,
+                    (string) json_encode($toolCall->arguments),
+                    $timeout,
+                );
+
+                $toolResult = new ToolResult(
+                    $toolCall->id,
+                    $toolCall->name,
+                    $toolCall->arguments,
+                    $output,
+                    $toolCall->resultId,
+                );
             } else {
                 $tool = $this->findTool($toolCall->name, $tools);
 
@@ -367,7 +383,7 @@ trait HandlesTextStreaming
             ];
 
             if (filled($tools)) {
-                $mappedTools = $this->mapTools($tools);
+                $mappedTools = $this->mapTools($tools, $provider, $timeout);
 
                 if (filled($mappedTools)) {
                     $body['tool_choice'] = 'auto';
