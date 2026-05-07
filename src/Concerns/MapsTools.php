@@ -6,6 +6,8 @@ namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 
 use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Jonaspauleta\LaravelAiMoonshot\Exceptions\UnsupportedProviderToolException;
+use Jonaspauleta\LaravelAiMoonshot\Providers\Tools\Convert;
+use Jonaspauleta\LaravelAiMoonshot\Providers\Tools\Fetch;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Tools\ProviderTool;
@@ -21,12 +23,27 @@ trait MapsTools
     public const string MOONSHOT_WEB_SEARCH = '$web_search';
 
     /**
+     * Name of Moonshot's server-side unit/currency conversion builtin function.
+     *
+     * @see https://platform.kimi.ai/docs/guide/use-official-tools
+     */
+    public const string MOONSHOT_CONVERT = '$convert';
+
+    /**
+     * Name of Moonshot's server-side URL fetch builtin function.
+     *
+     * @see https://platform.kimi.ai/docs/guide/use-official-tools
+     */
+    public const string MOONSHOT_FETCH = '$fetch';
+
+    /**
      * Map the given tools to Chat Completions function definitions.
      *
-     * `WebSearch` provider tools are translated to Moonshot's `$web_search`
-     * builtin_function. Note that the SDK's `WebSearch` knobs (`maxSearches`,
-     * `allowedDomains`, location fields) are silently dropped — Kimi exposes
-     * no client-side configuration for the builtin search.
+     * Recognised SDK ProviderTools are translated to Moonshot builtin_function
+     * entries: `WebSearch` → `$web_search`, `Convert` → `$convert`, `Fetch` →
+     * `$fetch`. The SDK's `WebSearch` knobs (`maxSearches`, `allowedDomains`,
+     * location fields) are silently dropped — Kimi exposes no client-side
+     * configuration for builtin functions.
      *
      * @param  array<int, mixed>  $tools
      * @return array<int, array<string, mixed>>
@@ -36,8 +53,10 @@ trait MapsTools
         $mapped = [];
 
         foreach ($tools as $tool) {
-            if ($tool instanceof WebSearch) {
-                $mapped[] = $this->mapBuiltinWebSearch();
+            $builtinName = $this->moonshotBuiltinName($tool);
+
+            if ($builtinName !== null) {
+                $mapped[] = $this->mapBuiltinFunction($builtinName);
 
                 continue;
             }
@@ -55,16 +74,42 @@ trait MapsTools
     }
 
     /**
-     * Map the SDK's WebSearch ProviderTool to Moonshot's builtin_function form.
+     * Resolve the Moonshot builtin function name for a given ProviderTool, or
+     * `null` if the tool is not a recognised Moonshot builtin.
+     */
+    protected function moonshotBuiltinName(mixed $tool): ?string
+    {
+        return match (true) {
+            $tool instanceof WebSearch => self::MOONSHOT_WEB_SEARCH,
+            $tool instanceof Convert => self::MOONSHOT_CONVERT,
+            $tool instanceof Fetch => self::MOONSHOT_FETCH,
+            default => null,
+        };
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function moonshotBuiltinNames(): array
+    {
+        return [
+            self::MOONSHOT_WEB_SEARCH,
+            self::MOONSHOT_CONVERT,
+            self::MOONSHOT_FETCH,
+        ];
+    }
+
+    /**
+     * Map a Moonshot builtin function name to its Chat Completions form.
      *
      * @return array<string, mixed>
      */
-    protected function mapBuiltinWebSearch(): array
+    protected function mapBuiltinFunction(string $name): array
     {
         return [
             'type' => 'builtin_function',
             'function' => [
-                'name' => self::MOONSHOT_WEB_SEARCH,
+                'name' => $name,
             ],
         ];
     }
