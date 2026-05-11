@@ -114,7 +114,7 @@ it('echoes reasoning_content from a KimiAssistantMessage in the outgoing chat bo
     });
 });
 
-it('omits reasoning_content when a KimiAssistantMessage has an empty reasoningContent', function (): void {
+it('fills a placeholder reasoning_content when KimiAssistantMessage has empty reasoningContent and thinking is enabled', function (): void {
     $response = [
         'id' => 'resp-final',
         'model' => 'kimi-k2.6',
@@ -162,7 +162,7 @@ it('omits reasoning_content when a KimiAssistantMessage has an empty reasoningCo
 
         foreach ($messages as $msg) {
             if (is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls'])) {
-                return ! array_key_exists('reasoning_content', $msg);
+                return ($msg['reasoning_content'] ?? null) === "\u{200B}";
             }
         }
 

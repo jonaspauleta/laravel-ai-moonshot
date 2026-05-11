@@ -5,6 +5,18 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.2] - 2026-05-11
+
+### Fixed
+
+- Kimi still returned HTTP 400 when `reasoning_content` was present but
+  **empty** for assistant `tool_calls` under thinking mode, and history rows
+  from `mapMessagesToChat` could omit the field entirely. The gateway now
+  walks **all** outgoing `messages`, when thinking is enabled, and sets a
+  non-empty placeholder (`U+200B`) on any assistant+`tool_calls` row that
+  lacks real reasoning text — including the first request and conversation
+  replay, not only in-stream tool continuations.
+
 ## [1.3.1] - 2026-05-11
 
 ### Fixed

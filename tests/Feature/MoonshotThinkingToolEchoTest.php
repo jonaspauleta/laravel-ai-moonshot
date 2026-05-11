@@ -3,11 +3,16 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Collection;
+use Jonaspauleta\LaravelAiMoonshot\Messages\KimiAssistantMessage;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Enums\Lab;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
+use Laravel\Ai\Messages\ToolResultMessage;
+use Laravel\Ai\Messages\UserMessage;
+use Laravel\Ai\Responses\Data\ToolCall;
+use Laravel\Ai\Responses\Data\ToolResult;
 
 beforeEach(function (): void {
     Http::preventStrayRequests();
@@ -169,7 +174,71 @@ it('echoes a fallback reasoning_content on the streaming tool follow-up when no 
     $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
     expect($assistantToolCallTurn)->toBeArray()
-        ->and($assistantToolCallTurn['reasoning_content'] ?? null)->toBe('');
+        ->and($assistantToolCallTurn['reasoning_content'] ?? null)->toBe("\u{200B}");
+});
+
+it('fills a non-empty fallback for historical KimiAssistantMessage tool_calls when reasoning is empty', function (): void {
+    $response = [
+        'id' => 'resp',
+        'model' => 'kimi-k2.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'ok'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+    ];
+
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')->push($response, 200);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
+    $historicalAssistant = new KimiAssistantMessage(
+        content: '',
+        reasoningContent: '',
+        toolCalls: new Collection([
+            new ToolCall(
+                id: 'call_x',
+                name: '$web_search',
+                arguments: ['query' => 'test'],
+                resultId: 'call_x',
+            ),
+        ]),
+    );
+
+    $provider->textGateway()->generateText(
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [
+            new UserMessage('First turn'),
+            $historicalAssistant,
+            new ToolResultMessage(new Collection([
+                new ToolResult(
+                    id: 'call_x',
+                    name: '$web_search',
+                    arguments: ['query' => 'test'],
+                    result: '{"r":1}',
+                    resultId: 'call_x',
+                ),
+            ])),
+            new Message('user', 'Follow up'),
+        ],
+        options: new ThinkingOptions(maxSteps: 3),
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        if (! str_ends_with($request->url(), '/v1/chat/completions')) {
+            return false;
+        }
+
+        /** @var array<string, mixed> $body */
+        $body = $request->data();
+        $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
+        $row = array_find($messages, fn ($m): bool => is_array($m) && ($m['role'] ?? null) === 'assistant' && isset($m['tool_calls']));
+
+        return is_array($row) && ($row['reasoning_content'] ?? null) === "\u{200B}";
+    });
 });
 
 it('echoes reasoning_content on the assistant tool_call message in the streaming follow-up', function (): void {

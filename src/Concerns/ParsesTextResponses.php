@@ -369,8 +369,6 @@ trait ParsesTextResponses
                     )->all();
                 }
 
-                $this->ensureEchoedReasoningForThinkingToolStep($mapped, $options, $provider);
-
                 $chatMessages[] = $mapped;
             } elseif ($msg instanceof ToolResultMessage) {
                 /** @var Collection<int, ToolResult> $toolResults */
@@ -385,6 +383,8 @@ trait ParsesTextResponses
                 }
             }
         }
+
+        $chatMessages = $this->applyThinkingReasoningEchoFallbacks($chatMessages, $options, $provider);
 
         $body = [
             'model' => $model,

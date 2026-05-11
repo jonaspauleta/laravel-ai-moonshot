@@ -14,13 +14,12 @@ trait BuildsTextRequests
 
     /**
      * When Kimi `thinking.type` is `enabled`, assistant messages that include
-     * `tool_calls` must repeat `reasoning_content` from the prior model output.
-     * If the stream (or non-streaming body) omitted reasoning entirely, this
-     * sentinel keeps the field present so the API accepts the request — it is
-     * not a substitute for real chain-of-thought and must not be shown as user
-     * visible "thinking"; it only satisfies echo rules for the next HTTP call.
+     * `tool_calls` must repeat non-empty `reasoning_content`. The API rejects a
+     * missing field and (in practice) an empty string for this shape. This
+     * invisible placeholder satisfies validation for replayed history and
+     * in-turn tool steps when the stream or stored messages omitted reasoning.
      */
-    private const FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP = '';
+    private const FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP = "\u{200B}";
 
     /**
      * Build the request body for the Chat Completions API.
@@ -42,9 +41,13 @@ trait BuildsTextRequests
     ): array {
         $body = [
             'model' => $model,
-            'messages' => $this->mapMessagesToChat(
-                $messages,
-                $this->composeInstructions($instructions, $schema),
+            'messages' => $this->applyThinkingReasoningEchoFallbacks(
+                $this->mapMessagesToChat(
+                    $messages,
+                    $this->composeInstructions($instructions, $schema),
+                ),
+                $options,
+                $provider,
             ),
         ];
 
@@ -90,7 +93,7 @@ trait BuildsTextRequests
 
     /**
      * Kimi returns HTTP 400 when thinking is enabled but a prior assistant
-     * `tool_calls` message has no `reasoning_content` key at all.
+     * `tool_calls` message has no usable `reasoning_content`.
      */
     protected function thinkingTypeIsEnabled(?TextGenerationOptions $options, Provider $provider): bool
     {
@@ -101,25 +104,47 @@ trait BuildsTextRequests
     }
 
     /**
-     * @param  array<string, mixed>  $assistantMessage
+     * Walk the OpenAI-shaped `messages` array and ensure every assistant message
+     * with `tool_calls` carries non-empty `reasoning_content` when Kimi
+     * thinking mode is on — including conversation history from
+     * `mapMessagesToChat`, not only the in-turn synthetic assistant row.
+     *
+     * @param  array<int, array<string, mixed>>  $chatMessages
+     * @return array<int, array<string, mixed>>
      */
-    protected function ensureEchoedReasoningForThinkingToolStep(
-        array &$assistantMessage,
+    protected function applyThinkingReasoningEchoFallbacks(
+        array $chatMessages,
         ?TextGenerationOptions $options,
         Provider $provider,
-    ): void {
-        if (! isset($assistantMessage['tool_calls']) || $assistantMessage['tool_calls'] === []) {
-            return;
-        }
-
+    ): array {
         if (! $this->thinkingTypeIsEnabled($options, $provider)) {
-            return;
+            return $chatMessages;
         }
 
-        if (array_key_exists('reasoning_content', $assistantMessage)) {
-            return;
+        foreach ($chatMessages as $i => $msg) {
+            if (($msg['role'] ?? null) !== 'assistant') {
+                continue;
+            }
+            if (! isset($msg['tool_calls'])) {
+                continue;
+            }
+            if (! is_array($msg['tool_calls'])) {
+                continue;
+            }
+            if ($msg['tool_calls'] === []) {
+                continue;
+            }
+
+            $rc = $msg['reasoning_content'] ?? null;
+
+            if (is_string($rc) && $rc !== '') {
+                continue;
+            }
+
+            $msg['reasoning_content'] = self::FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP;
+            $chatMessages[$i] = $msg;
         }
 
-        $assistantMessage['reasoning_content'] = self::FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP;
+        return $chatMessages;
     }
 }

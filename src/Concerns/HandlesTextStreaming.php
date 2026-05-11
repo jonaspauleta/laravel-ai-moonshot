@@ -354,8 +354,6 @@ trait HandlesTextStreaming
                 fn (ToolCall $toolCall): array => $this->serializeToolCallToChat($toolCall), $mappedToolCalls
             );
 
-            $this->ensureEchoedReasoningForThinkingToolStep($assistantMsg, $options, $provider);
-
             /** @var array<int, array<string, mixed>> $toolResultMessages */
             $toolResultMessages = [];
 
@@ -369,13 +367,13 @@ trait HandlesTextStreaming
 
             $updatedPriorMessages = [...$priorChatMessages, $assistantMsg, ...$toolResultMessages];
 
-            $chatMessages = [
+            $chatMessages = $this->applyThinkingReasoningEchoFallbacks([
                 ...$this->mapMessagesToChat(
                     $originalMessages,
                     $this->composeInstructions($instructions, $schema),
                 ),
                 ...$updatedPriorMessages,
-            ];
+            ], $options, $provider);
 
             $body = [
                 'model' => $model,
