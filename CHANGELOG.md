@@ -5,6 +5,27 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-05-11
+
+### Added
+
+- New `Jonaspauleta\LaravelAiMoonshot\Messages\KimiAssistantMessage` — an
+  `AssistantMessage` subclass carrying a `reasoningContent` property that
+  `MapsMessages::mapAssistantMessage` echoes back as `reasoning_content` on
+  outgoing chat-completions payloads when filled. Plain `AssistantMessage`
+  continues to map without `reasoning_content`, so existing callers are
+  unaffected.
+
+### Why
+
+Moonshot/Kimi K2.6 rejects every replayed conversation with HTTP 400
+"thinking is enabled but reasoning_content is missing in assistant tool call
+message at index N" whenever `thinking.keep: all` is set and a historical
+assistant message has tool_calls without `reasoning_content`. Apps that
+persist conversations cross-turn now have a way to re-emit captured reasoning
+on follow-up requests — instantiate `KimiAssistantMessage` instead of
+`AssistantMessage` when rehydrating from storage.
+
 ## [1.2.0] - 2026-05-07
 
 ### Added

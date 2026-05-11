@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 
 use Illuminate\Support\Collection;
+use Jonaspauleta\LaravelAiMoonshot\Messages\KimiAssistantMessage;
 use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Messages\MessageRole;
@@ -83,6 +84,14 @@ trait MapsMessages
 
         if (filled($message->content)) {
             $msg['content'] = $message->content;
+        }
+
+        // KimiAssistantMessage carries reasoning_content captured from a prior
+        // turn. Echo it back so Moonshot's `thinking.keep: all` is happy —
+        // otherwise the API 400s with `reasoning_content is missing in
+        // assistant tool call message`.
+        if ($message instanceof KimiAssistantMessage && filled($message->reasoningContent)) {
+            $msg['reasoning_content'] = $message->reasoningContent;
         }
 
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
