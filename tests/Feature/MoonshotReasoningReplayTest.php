@@ -100,9 +100,12 @@ it('echoes reasoning_content from a KimiAssistantMessage in the outgoing chat bo
 
         /** @var array<string, mixed> $body */
         $body = $request->data();
-        $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
+        $messagesRaw = $body['messages'] ?? null;
+        if (! is_array($messagesRaw)) {
+            return false;
+        }
 
-        $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg)
+        $assistantToolCallTurn = array_find($messagesRaw, fn ($msg): bool => is_array($msg)
             && ($msg['role'] ?? null) === 'assistant'
             && isset($msg['tool_calls']));
 

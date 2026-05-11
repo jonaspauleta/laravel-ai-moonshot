@@ -113,8 +113,12 @@ it('echoes reasoning_content on the assistant tool_call message in the non-strea
 
         /** @var array<string, mixed> $body */
         $body = $request->data();
-        $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
-        $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
+        $messagesRaw = $body['messages'] ?? null;
+        if (! is_array($messagesRaw)) {
+            return false;
+        }
+
+        $assistantToolCallTurn = array_find($messagesRaw, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
         if ($assistantToolCallTurn === null) {
             return false;
@@ -170,8 +174,12 @@ it('echoes a fallback reasoning_content on the streaming tool follow-up when no 
     expect(data_get($firstBody, 'thinking.type'))->toBe('enabled');
     expect(data_get($secondBody, 'thinking.type'))->toBe('enabled');
 
-    $messages = is_array($secondBody['messages'] ?? null) ? $secondBody['messages'] : [];
-    $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
+    $messagesRaw = $secondBody['messages'] ?? null;
+    if (! is_array($messagesRaw)) {
+        throw new RuntimeException('Expected chat messages array on second request');
+    }
+
+    $assistantToolCallTurn = array_find($messagesRaw, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
     expect($assistantToolCallTurn)->toBeArray()
         ->and($assistantToolCallTurn['reasoning_content'] ?? null)->toBe("\u{200B}");
@@ -234,8 +242,12 @@ it('fills a non-empty fallback for historical KimiAssistantMessage tool_calls wh
 
         /** @var array<string, mixed> $body */
         $body = $request->data();
-        $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
-        $row = array_find($messages, fn ($m): bool => is_array($m) && ($m['role'] ?? null) === 'assistant' && isset($m['tool_calls']));
+        $messagesRaw = $body['messages'] ?? null;
+        if (! is_array($messagesRaw)) {
+            return false;
+        }
+
+        $row = array_find($messagesRaw, fn ($m): bool => is_array($m) && ($m['role'] ?? null) === 'assistant' && isset($m['tool_calls']));
 
         return is_array($row) && ($row['reasoning_content'] ?? null) === "\u{200B}";
     });
@@ -284,8 +296,12 @@ it('echoes reasoning_content on the assistant tool_call message in the streaming
 
         /** @var array<string, mixed> $body */
         $body = $request->data();
-        $messages = is_array($body['messages'] ?? null) ? $body['messages'] : [];
-        $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
+        $messagesRaw = $body['messages'] ?? null;
+        if (! is_array($messagesRaw)) {
+            return false;
+        }
+
+        $assistantToolCallTurn = array_find($messagesRaw, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
 
         if ($assistantToolCallTurn === null) {
             return false;
