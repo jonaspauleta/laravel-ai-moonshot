@@ -5,6 +5,18 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-05-11
+
+### Fixed
+
+- Streaming and non-streaming multi-step tool use: when Kimi `thinking.type`
+  is `enabled`, assistant messages with `tool_calls` must echo
+  `reasoning_content` back. Some streams omit `reasoning_content` deltas
+  before `tool_calls`, so the follow-up POST would 400. The gateway now
+  inserts a field-preserving fallback `reasoning_content` (empty string) for
+  that assistant turn only — `thinking` stays enabled end-to-end; we do not
+  disable the user's thinking preference.
+
 ## [1.3.0] - 2026-05-11
 
 ### Added

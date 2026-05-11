@@ -119,6 +119,59 @@ it('echoes reasoning_content on the assistant tool_call message in the non-strea
     });
 });
 
+it('echoes a fallback reasoning_content on the streaming tool follow-up when no reasoning deltas were streamed, without turning thinking off', function (): void {
+    $firstSse = sseFromThinkingChunks([
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => [
+            'tool_calls' => [[
+                'index' => 0,
+                'id' => 'call_stream',
+                'function' => ['name' => '$web_search', 'arguments' => '{"query":"x"}'],
+            ]],
+        ]]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'tool_calls']]],
+    ]);
+
+    $secondSse = sseFromThinkingChunks([
+        ['id' => 'y', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['content' => 'Done']]]],
+        ['id' => 'y', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => [], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 1]],
+    ]);
+
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')
+        ->push($firstSse, 200, ['Content-Type' => 'text/event-stream'])
+        ->push($secondSse, 200, ['Content-Type' => 'text/event-stream']);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
+    $generator = $provider->textGateway()->streamText(
+        'inv-no-reasoning-tool-follow-up',
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new Message('user', 'x?')],
+        options: new ThinkingOptions(maxSteps: 3),
+    );
+
+    iterator_to_array($generator, false);
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+    if ($recorded[0] === null || $recorded[1] === null) {
+        throw new RuntimeException('Expected two Http recordings');
+    }
+
+    $firstBody = $recorded[0][0]->data();
+    $secondBody = $recorded[1][0]->data();
+    expect(data_get($firstBody, 'thinking.type'))->toBe('enabled');
+    expect(data_get($secondBody, 'thinking.type'))->toBe('enabled');
+
+    $messages = is_array($secondBody['messages'] ?? null) ? $secondBody['messages'] : [];
+    $assistantToolCallTurn = array_find($messages, fn ($msg): bool => is_array($msg) && ($msg['role'] ?? null) === 'assistant' && isset($msg['tool_calls']));
+
+    expect($assistantToolCallTurn)->toBeArray()
+        ->and($assistantToolCallTurn['reasoning_content'] ?? null)->toBe('');
+});
+
 it('echoes reasoning_content on the assistant tool_call message in the streaming follow-up', function (): void {
     $firstSse = sseFromThinkingChunks([
         ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant']]]],

@@ -369,6 +369,8 @@ trait ParsesTextResponses
                     )->all();
                 }
 
+                $this->ensureEchoedReasoningForThinkingToolStep($mapped, $options, $provider);
+
                 $chatMessages[] = $mapped;
             } elseif ($msg instanceof ToolResultMessage) {
                 /** @var Collection<int, ToolResult> $toolResults */

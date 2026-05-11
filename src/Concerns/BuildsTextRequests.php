@@ -13,6 +13,16 @@ trait BuildsTextRequests
     use ComposesSchemaInstructions;
 
     /**
+     * When Kimi `thinking.type` is `enabled`, assistant messages that include
+     * `tool_calls` must repeat `reasoning_content` from the prior model output.
+     * If the stream (or non-streaming body) omitted reasoning entirely, this
+     * sentinel keeps the field present so the API accepts the request — it is
+     * not a substitute for real chain-of-thought and must not be shown as user
+     * visible "thinking"; it only satisfies echo rules for the next HTTP call.
+     */
+    private const FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP = '';
+
+    /**
      * Build the request body for the Chat Completions API.
      *
      * @param  array<int, mixed>  $messages
@@ -76,5 +86,40 @@ trait BuildsTextRequests
     protected function buildResponseFormat(): array
     {
         return ['type' => 'json_object'];
+    }
+
+    /**
+     * Kimi returns HTTP 400 when thinking is enabled but a prior assistant
+     * `tool_calls` message has no `reasoning_content` key at all.
+     */
+    protected function thinkingTypeIsEnabled(?TextGenerationOptions $options, Provider $provider): bool
+    {
+        $opts = $options?->providerOptions($provider->driver());
+
+        return is_array($opts['thinking'] ?? null)
+            && ($opts['thinking']['type'] ?? null) === 'enabled';
+    }
+
+    /**
+     * @param  array<string, mixed>  $assistantMessage
+     */
+    protected function ensureEchoedReasoningForThinkingToolStep(
+        array &$assistantMessage,
+        ?TextGenerationOptions $options,
+        Provider $provider,
+    ): void {
+        if (! isset($assistantMessage['tool_calls']) || $assistantMessage['tool_calls'] === []) {
+            return;
+        }
+
+        if (! $this->thinkingTypeIsEnabled($options, $provider)) {
+            return;
+        }
+
+        if (array_key_exists('reasoning_content', $assistantMessage)) {
+            return;
+        }
+
+        $assistantMessage['reasoning_content'] = self::FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP;
     }
 }

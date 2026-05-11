@@ -354,6 +354,8 @@ trait HandlesTextStreaming
                 fn (ToolCall $toolCall): array => $this->serializeToolCallToChat($toolCall), $mappedToolCalls
             );
 
+            $this->ensureEchoedReasoningForThinkingToolStep($assistantMsg, $options, $provider);
+
             /** @var array<int, array<string, mixed>> $toolResultMessages */
             $toolResultMessages = [];
 
