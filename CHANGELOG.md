@@ -5,6 +5,42 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-05-19
+
+### Added
+
+- Real Structured Outputs support. When the SDK passes a JSON Schema (via
+  `Laravel\Ai\Contracts\HasStructuredOutput` or `StructuredAnonymousAgent`),
+  the gateway now sends a Moonshot `response_format: { type: 'json_schema',
+  json_schema: { name, schema, strict: true } }` envelope on both
+  `generateText()` and `streamText()`. Schemas are wrapped via
+  `Laravel\Ai\ObjectSchema` so `additionalProperties: false` is set
+  recursively on every nested object — required by Moonshot's MFJS strict
+  mode. The non-streaming path decodes the response into
+  `Laravel\Ai\Responses\StructuredTextResponse` automatically (existing
+  behavior); the streaming path emits the same envelope and the SDK's
+  `TextDelta` chunks (no `ObjectDelta` events exist in the SDK).
+
+### Changed
+
+- `response_format` was previously `{ type: 'json_object' }` — a soft hint
+  with no server-side schema enforcement. It is now `json_schema` with
+  `strict: true`, matching Moonshot's documented recommendation and the
+  upstream `Laravel\Ai\Gateway\OpenAi` gateway. Apps that depended on the
+  looser `json_object` mode may need to drop MFJS-incompatible schema
+  keywords (`format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`,
+  `minimum`/`maximum`, `title`, `$comment`, `prefixItems`) — Moonshot returns
+  HTTP 400 on incompatible schemas, surfaced via the existing failover-error
+  handling. See README "Structured output" for the MFJS spec link.
+
+### Why
+
+Moonshot recently added OpenAI-style `json_schema` support to their
+Chat Completions endpoint on `kimi-k2.5` and `kimi-k2.6`. Their docs
+explicitly mark it as recommended over `json_object`. This release wires it
+up so schemas are actually enforced by the model instead of relying on the
+prompt-injected schema hint alone.
+
 ## [1.3.2] - 2026-05-11
 
 ### Fixed

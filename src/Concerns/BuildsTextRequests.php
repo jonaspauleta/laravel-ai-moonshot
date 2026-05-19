@@ -6,6 +6,7 @@ namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 
 use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 
 trait BuildsTextRequests
@@ -61,7 +62,7 @@ trait BuildsTextRequests
         }
 
         if (filled($schema)) {
-            $body['response_format'] = $this->buildResponseFormat();
+            $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
         if (! is_null($options?->maxTokens)) {
@@ -82,13 +83,36 @@ trait BuildsTextRequests
     }
 
     /**
-     * Build the response format options for structured output.
+     * Build the `response_format` envelope Moonshot expects for Structured Outputs.
      *
-     * @return array{type: string}
+     * Moonshot's Chat Completions API mirrors OpenAI's `response_format` shape:
+     * `{ type: 'json_schema', json_schema: { name, schema, strict } }`. Strict
+     * mode requires MFJS (Moonshot Flavored JSON Schema), a subset that excludes
+     * `format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`, etc. Schemas
+     * are passed through verbatim — Moonshot returns HTTP 400 on incompatible
+     * keywords, which surfaces cleanly via the existing failover-error handling.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array{
+     *     type: 'json_schema',
+     *     json_schema: array{name: string, schema: array<string, mixed>, strict: true}
+     * }
      */
-    protected function buildResponseFormat(): array
+    protected function buildResponseFormat(array $schema): array
     {
-        return ['type' => 'json_object'];
+        $schemaArray = new ObjectSchema($schema)->toSchema();
+
+        $name = $schemaArray['name'] ?? null;
+        unset($schemaArray['name']);
+
+        return [
+            'type' => 'json_schema',
+            'json_schema' => [
+                'name' => is_string($name) ? $name : 'schema_definition',
+                'schema' => $schemaArray,
+                'strict' => true,
+            ],
+        ];
     }
 
     /**

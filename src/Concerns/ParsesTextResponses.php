@@ -401,7 +401,7 @@ trait ParsesTextResponses
         }
 
         if (filled($schema)) {
-            $body['response_format'] = $this->buildResponseFormat();
+            $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
         if (! is_null($options?->maxTokens)) {

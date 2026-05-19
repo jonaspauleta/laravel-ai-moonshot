@@ -59,6 +59,40 @@ code.
   Kept for parity with upstream `DeepSeekGateway`. If you start emitting events,
   drop the ignore comment.
 
+## Structured outputs
+
+Schemas passed via `TextGateway::generateText()`'s `?array $schema` (typically
+from an agent implementing `Laravel\Ai\Contracts\HasStructuredOutput` or via
+`Laravel\Ai\StructuredAnonymousAgent`) become a Moonshot Chat-Completions
+`response_format` envelope:
+
+```php
+response_format: {
+    type: 'json_schema',
+    json_schema: { name, schema, strict: true },
+}
+```
+
+`strict` is hard-coded to `true` — matches upstream `OpenAi` gateway in
+`laravel/ai` 0.6.x, and Moonshot's docs explicitly recommend `json_schema` over
+the older `json_object` mode. Three call sites emit this envelope and must stay
+in sync: `BuildsTextRequests::buildTextRequestBody()`, the tool-follow-up body
+in `ParsesTextResponses` (the recursive `continueWithToolResults` path), and
+`HandlesTextStreaming` for streaming requests.
+
+**Schemas must be MFJS-compatible** (Moonshot Flavored JSON Schema —
+[spec](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md)).
+Unsupported keywords include `format`, `pattern`, `oneOf`, `allOf`,
+`minLength`/`maxLength`, `minimum`/`maximum`, `title`, `$comment`, `prefixItems`.
+Schemas are passed through verbatim — Moonshot returns HTTP 400 on
+incompatible keywords, surfaced via `withErrorHandling`. We deliberately do
+not sanitize.
+
+Streaming structured outputs send the same envelope; SDK has no
+`ObjectStart`/`ObjectDelta`/`ObjectEnd` events, so callers accumulate
+`TextDelta`s and `json_decode` themselves. Non-streaming wraps the decoded
+content into `StructuredTextResponse` automatically via `ParsesTextResponses`.
+
 ## Do not
 
 - Add embeddings, image generation, audio, or transcription. Moonshot has no
