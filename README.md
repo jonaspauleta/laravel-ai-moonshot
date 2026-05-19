@@ -14,6 +14,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 - ✅ Text generation (`prompt()`)
 - ✅ Streaming responses (`stream()`, `broadcast()`, `broadcastOnQueue()`)
 - ✅ Tool calling (function calling)
+- ✅ Structured outputs (schema-constrained JSON via `response_format: json_schema`, strict mode)
 - ✅ Image attachments (base64, remote URL, local file, stored disk, `UploadedFile`)
 - ✅ Document Q&A via Moonshot Files API (PDF, DOC, XLSX, PPTX, …) — server-side OCR + extraction
 - ✅ Kimi **thinking mode** with `reasoning_content` deltas surfaced as `ReasoningStart` / `ReasoningDelta` / `ReasoningEnd` stream events
@@ -32,7 +33,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 | Image input                                 | Supported                                       |
 | Document Q&A                                | Supported via Moonshot Files API                |
 | Thinking mode (Kimi reasoning)              | Supported                                       |
-| Structured output                           | Best-effort — JSON mode, validate manually      |
+| Structured output                           | Supported — `response_format: json_schema`, strict mode (MFJS) |
 | Provider tools (file search, web fetch, …)  | Not supported (web search supported separately) |
 | Embeddings                                  | Not supported                                   |
 | Image generation / audio / transcription / reranking | Not supported                          |
@@ -277,6 +278,54 @@ $response = agent(
 )->prompt('What is the weather in Lisbon?', provider: 'moonshot');
 ```
 
+### Structured output
+
+Moonshot supports OpenAI-compatible Structured Outputs on `kimi-k2.5` and `kimi-k2.6`. When a schema is provided, the gateway sends `response_format: { type: 'json_schema', json_schema: { name, schema, strict: true } }` and the response is decoded into a `StructuredTextResponse` whose `->structured` is an array matching the schema.
+
+Implement `HasStructuredOutput` on an agent:
+
+```php
+namespace App\Ai\Agents;
+
+use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Laravel\Ai\Attributes\Provider;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Contracts\HasStructuredOutput;
+use Laravel\Ai\Promptable;
+
+#[Provider('moonshot')]
+final class ExtractPerson implements Agent, HasStructuredOutput
+{
+    use Promptable;
+
+    public function instructions(): string
+    {
+        return 'Extract the person mentioned in the text.';
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [
+            'name' => $schema->string()->description('Full name')->required(),
+            'age' => $schema->integer()->required(),
+        ];
+    }
+}
+```
+
+```php
+$response = ExtractPerson::make()
+    ->prompt('Ada Lovelace was 36 when she died.');
+
+$response->structured; // ['name' => 'Ada Lovelace', 'age' => 36]
+```
+
+Or for one-offs, use `StructuredAnonymousAgent` directly (see the [Laravel AI SDK docs](https://laravel.com/docs/13.x/ai-sdk#structured-output)).
+
+> **MFJS limitations.** Moonshot's strict mode requires [MFJS](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md) — a JSON-Schema subset. Unsupported keywords include `format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`, `minimum`/`maximum`, `title`, `$comment`, and `prefixItems`. Schemas are passed through verbatim — Moonshot returns HTTP 400 on incompatible keywords.
+
+> **Streaming.** Streaming + schema also sends `response_format: json_schema`. The SDK does not emit `ObjectDelta` events — accumulate `TextDelta`s and `json_decode` at `StreamEnd`. Non-streaming returns a decoded `StructuredTextResponse` automatically.
+
 ### Web search
 
 Moonshot ships a server-side web search builtin (`$web_search`) that you can drop into any Moonshot agent by passing the SDK's generic `Laravel\Ai\Providers\Tools\WebSearch` provider tool. The gateway translates it to Moonshot's `builtin_function` payload and auto-replies to the model's `$web_search` tool_call with the model's own arguments — Kimi runs the actual search server-side.
@@ -467,10 +516,6 @@ Run `php artisan ai:moonshot:models` against a configured environment to print t
 
 You can also pass an explicit model per call: `->prompt('...', model: 'kimi-k2.6')`.
 
-## Caveats
-
-**Structured output is best-effort.** When the SDK passes a JSON Schema (via the structured agent flow), the gateway sets `response_format: json_object` and prepends the schema to the system instructions — but Moonshot does **not** enforce JSON Schema server-side. Validate the response in your application (e.g. with `spatie/laravel-data` or any JSON Schema validator) and retry on parse errors.
-
 ## Not supported
 
 The Moonshot API does not expose endpoints for the following capabilities at the time of release; this package will throw or fail-fast rather than fake them:
@@ -489,7 +534,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 | HTTP 400 `model not found` for `kimi-k2.6` (or any default tier)                               | Moonshot renamed or retired the default. Pin a working model under `config/ai.php` `providers.moonshot.models.text.{default,cheapest,smartest}`.          |
 | `UnsupportedProviderToolException: Moonshot does not support [WebFetch] provider tools.`       | You passed an unsupported `ProviderTool` subclass (e.g. `WebFetch`, `FileSearch`). For web search use `Laravel\Ai\Providers\Tools\WebSearch` (mapped to Moonshot's `$web_search` builtin). For everything else, use plain function tools. |
 | Document attachment via SDK's generic `Document` is silently ignored or rejected               | Generic `Document` attachments are intentionally unsupported. Use `withMoonshotFile()` (or the `MoonshotFiles` service) — this routes through Moonshot's Files API, which performs server-side extraction. See [Document Q&A](#document-qa-pdf-doc-xlsx-). |
-| Structured output returns malformed JSON                                                      | Moonshot does **not** enforce JSON Schema server-side. Validate the response in your app and retry on parse error. See [Caveats](#caveats).               |
+| HTTP 400 with structured outputs (e.g. `unsupported keyword`)                                 | Moonshot's strict mode requires [MFJS](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md) — a JSON-Schema subset. Drop unsupported keywords (`format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`, etc.) from your schema. See [Structured output](#structured-output).                                            |
 | Streaming hangs on long thinking-mode responses                                               | Default per-request timeout is 60s. Pass `timeout:` to `streamText()` or raise it in the gateway's HTTP client invocation.                                |
 | `Http::fake()` in tests does not intercept the request                                        | Fake key must include the full base URL: `'api.moonshot.ai/v1/chat/completions' => Http::response(...)`. The Laravel HTTP client applies the base URL.    |
 | `MoonshotFilesException: ... extraction failed for [file-...]`                                | Moonshot could not extract text from the uploaded file. Check the file is one of the [supported formats](https://platform.kimi.ai/docs/api/files) and not corrupted. Inspect status via `php artisan ai:moonshot:files`. |

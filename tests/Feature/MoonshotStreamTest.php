@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use Illuminate\Http\Client\Request;
+use Illuminate\JsonSchema\JsonSchemaTypeFactory;
 use Illuminate\Support\Facades\Http;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Messages\Message;
@@ -115,4 +117,48 @@ it('emits reasoning events when the model returns reasoning_content deltas', fun
         $reasoningDeltas,
     ));
     expect($reasoning)->toBe('let me think... carefully');
+});
+
+it('sends response_format json_schema in streaming requests when a schema is provided', function (): void {
+    $sse = sseFromChunks([
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['role' => 'assistant']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['content' => '{"name":']]]],
+        ['id' => 'x', 'model' => 'kimi-k2.6', 'choices' => [['index' => 0, 'delta' => ['content' => '"Ada"}'], 'finish_reason' => 'stop']], 'usage' => ['prompt_tokens' => 3, 'completion_tokens' => 4]],
+    ]);
+
+    Http::fake([
+        'api.moonshot.ai/v1/chat/completions' => Http::response($sse, 200, ['Content-Type' => 'text/event-stream']),
+    ]);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+    $factory = new JsonSchemaTypeFactory;
+
+    $generator = $provider->textGateway()->streamText(
+        'inv-schema',
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new Message('user', 'Pick a name.')],
+        schema: ['name' => $factory->string()],
+    );
+
+    iterator_to_array($generator, false);
+
+    Http::assertSent(function (Request $request): bool {
+        /** @var array<string, mixed> $body */
+        $body = $request->data();
+        /** @var array<string, mixed>|null $rf */
+        $rf = is_array($body['response_format'] ?? null) ? $body['response_format'] : null;
+
+        expect($rf)->not->toBeNull();
+        expect($rf)->toHaveKey('type', 'json_schema');
+
+        /** @var array<string, mixed> $js */
+        $js = is_array($rf['json_schema'] ?? null) ? $rf['json_schema'] : [];
+        expect($js)->toHaveKey('name', 'schema_definition');
+        expect($js)->toHaveKey('strict', true);
+        expect($js)->toHaveKey('schema');
+
+        return true;
+    });
 });
