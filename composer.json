@@ -35,7 +35,7 @@
         "illuminate/contracts": "^12.0 || ^13.0",
         "illuminate/http": "^12.0 || ^13.0",
         "illuminate/support": "^12.0 || ^13.0",
-        "laravel/ai": "~0.6.3"
+        "laravel/ai": "~0.6.3 || ~0.8.0"
     },
     "require-dev": {
         "driftingly/rector-laravel": "^2.2",
