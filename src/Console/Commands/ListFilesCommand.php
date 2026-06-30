@@ -4,19 +4,17 @@ declare(strict_types=1);
 
 namespace Jonaspauleta\LaravelAiMoonshot\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Jonaspauleta\LaravelAiMoonshot\Exceptions\MoonshotFilesException;
 use Jonaspauleta\LaravelAiMoonshot\Files\MoonshotFile;
 use Jonaspauleta\LaravelAiMoonshot\Files\MoonshotFiles;
 
+#[Description('List or delete files stored on the configured Moonshot account.')]
+#[Signature('ai:moonshot:files {--delete=* : File ID(s) to delete instead of listing}')]
 final class ListFilesCommand extends Command
 {
-    /** @var string */
-    protected $signature = 'ai:moonshot:files {--delete=* : File ID(s) to delete instead of listing}';
-
-    /** @var string */
-    protected $description = 'List or delete files stored on the configured Moonshot account.';
-
     public function handle(MoonshotFiles $files): int
     {
         /** @var array<int, string> $deleteIds */

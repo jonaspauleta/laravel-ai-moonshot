@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Jonaspauleta\LaravelAiMoonshot\Console\Commands;
 
+use Illuminate\Console\Attributes\Description;
+use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
 
+#[Description('List the models exposed by the configured Moonshot account.')]
+#[Signature('ai:moonshot:models {--json : Output the raw API response as JSON}')]
 final class ListModelsCommand extends Command
 {
-    protected $signature = 'ai:moonshot:models {--json : Output the raw API response as JSON}';
-
-    protected $description = 'List the models exposed by the configured Moonshot account.';
-
     public function handle(): int
     {
         $config = config('ai.providers.moonshot');
