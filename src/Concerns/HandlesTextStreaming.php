@@ -49,8 +49,10 @@ trait HandlesTextStreaming
         ?int $maxSteps = null,
         array $priorChatMessages = [],
         ?int $timeout = null,
+        ?Usage $accumulatedUsage = null,
     ): Generator {
         $maxSteps ??= $options?->maxSteps;
+        $accumulatedUsage ??= new Usage(0, 0);
 
         $messageId = $this->generateEventId();
         $streamStartEmitted = false;
@@ -248,6 +250,7 @@ trait HandlesTextStreaming
                 $maxSteps,
                 $priorChatMessages,
                 $timeout,
+                $accumulatedUsage->add($usage ?? new Usage(0, 0)),
             );
 
             return;
@@ -256,7 +259,7 @@ trait HandlesTextStreaming
         yield new StreamEnd(
             $this->generateEventId(),
             $this->extractFinishReason(['finish_reason' => $finishReason ?? ''])->value,
-            $usage ?? new Usage(0, 0),
+            $accumulatedUsage->add($usage ?? new Usage(0, 0)),
             time(),
         )->withInvocationId($invocationId);
     }
@@ -286,7 +289,10 @@ trait HandlesTextStreaming
         ?int $maxSteps,
         array $priorChatMessages,
         ?int $timeout = null,
+        ?Usage $accumulatedUsage = null,
     ): Generator {
+        $accumulatedUsage ??= new Usage(0, 0);
+
         /** @var array<int, ToolResult> $toolResults */
         $toolResults = [];
 
@@ -430,12 +436,13 @@ trait HandlesTextStreaming
                 $maxSteps,
                 $updatedPriorMessages,
                 $timeout,
+                $accumulatedUsage,
             );
         } else {
             yield new StreamEnd(
                 $this->generateEventId(),
                 'stop',
-                new Usage(0, 0),
+                $accumulatedUsage,
                 time(),
             )->withInvocationId($invocationId);
         }
