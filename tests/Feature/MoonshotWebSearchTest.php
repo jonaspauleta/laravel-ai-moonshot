@@ -3,10 +3,12 @@
 declare(strict_types=1);
 
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Jonaspauleta\LaravelAiMoonshot\MoonshotGateway;
 use Laravel\Ai\AiManager;
+use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
@@ -15,6 +17,7 @@ use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\ToolResult as ToolResultEvent;
+use Laravel\Ai\Tools\Request as ToolRequest;
 
 beforeEach(function (): void {
     Http::preventStrayRequests();
@@ -58,6 +61,29 @@ function callWebSearchProtected(MoonshotGateway $gateway, string $method, mixed 
     return $closure(...$args);
 }
 
+final class NamedTrackLookupTool implements Tool
+{
+    public function name(): string
+    {
+        return 'lookup_track';
+    }
+
+    public function description(): string
+    {
+        return 'Look up a race track.';
+    }
+
+    public function handle(ToolRequest $request): string
+    {
+        return 'Spa-Francorchamps';
+    }
+
+    public function schema(JsonSchema $schema): array
+    {
+        return [];
+    }
+}
+
 it('maps WebSearch ProviderTool to Moonshot $web_search builtin_function', function (): void {
     $gateway = webSearchGateway();
 
@@ -90,13 +116,76 @@ it('echoes $web_search arguments as ToolResult content in non-streaming path', f
         resultId: 'call_1',
     );
 
-    /** @var array<int, ToolResult> $results */
-    $results = callWebSearchProtected($gateway, 'executeToolCalls', [$toolCall], [], $provider);
+    /** @var ToolResult|null $result */
+    $result = callWebSearchProtected($gateway, 'resolveProviderToolCall', $toolCall, $provider);
 
-    expect($results)->toHaveCount(1);
-    expect($results[0]->name)->toBe('$web_search');
-    expect($results[0]->result)->toBe('{"query":"Spa Francorchamps weather"}');
-    expect($results[0]->id)->toBe('call_1');
+    expect($result)->not->toBeNull();
+    assert($result instanceof ToolResult);
+    expect($result->name)->toBe('$web_search');
+    expect($result->result)->toBe('{"query":"Spa Francorchamps weather"}');
+    expect($result->id)->toBe('call_1');
+});
+
+it('preserves mixed provider and named tool call order', function (): void {
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')
+        ->push([
+            'id' => 'resp-tools',
+            'model' => 'kimi-k2.6',
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'tool_calls' => [
+                        ['id' => 'provider-1', 'type' => 'function', 'function' => ['name' => '$web_search', 'arguments' => '{"query":"Spa"}']],
+                        ['id' => 'regular-1', 'type' => 'function', 'function' => ['name' => 'lookup_track', 'arguments' => '{}']],
+                    ],
+                ],
+                'finish_reason' => 'tool_calls',
+            ]],
+            'usage' => ['prompt_tokens' => 4, 'completion_tokens' => 2],
+        ], 200)
+        ->push([
+            'id' => 'resp-final',
+            'model' => 'kimi-k2.6',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'Done.'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 5, 'completion_tokens' => 1],
+        ], 200);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
+    /** @var array<int, Tool> $tools */
+    $tools = [new WebSearch, new NamedTrackLookupTool];
+
+    $provider->textGenerationLoop()->generate(
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new Message('user', 'Find Spa.')],
+        tools: $tools,
+        options: new TextGenerationOptions(maxSteps: 3),
+    );
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+    assert($recorded[0] !== null && $recorded[1] !== null);
+
+    $firstBody = $recorded[0][0]->data();
+    $mappedTools = is_array($firstBody['tools'] ?? null) ? $firstBody['tools'] : [];
+    expect(data_get($mappedTools, '1.function.name'))->toBe('lookup_track');
+
+    $secondBody = $recorded[1][0]->data();
+    $messages = is_array($secondBody['messages'] ?? null) ? $secondBody['messages'] : [];
+    $toolResultIds = array_values(array_map(
+        static fn (array $message): string => is_string($message['tool_call_id'] ?? null) ? $message['tool_call_id'] : '',
+        array_filter($messages, static fn (mixed $message): bool => is_array($message) && ($message['role'] ?? null) === 'tool'),
+    ));
+
+    expect($toolResultIds)->toBe(['provider-1', 'regular-1']);
 });
 
 it('drives a $web_search tool_call round-trip end-to-end (non-streaming)', function (): void {
@@ -145,7 +234,7 @@ it('drives a $web_search tool_call round-trip end-to-end (non-streaming)', funct
     // why: drive the $web_search round-trip through public contract without
     // tripping the SDK's narrow Tool[] PHPDoc on tools — the response handler
     // recognizes $web_search by name regardless of whether tools were declared.
-    $response = $provider->textGateway()->generateText(
+    $response = $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -200,7 +289,7 @@ it('echoes $web_search arguments as ToolResultEvent during streaming', function 
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-ws',
         $provider,
         'kimi-k2.6',

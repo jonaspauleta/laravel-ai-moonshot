@@ -19,7 +19,7 @@ trait MapsMessages
     /**
      * Map the given Laravel messages to Chat Completions messages format.
      *
-     * @param  array<int, mixed>  $messages
+     * @param  array<mixed>  $messages
      * @return array<int, array<string, mixed>>
      */
     protected function mapMessagesToChat(array $messages, ?string $instructions = null): array
@@ -92,6 +92,12 @@ trait MapsMessages
         // assistant tool call message`.
         if ($message instanceof KimiAssistantMessage && filled($message->reasoningContent)) {
             $msg['reasoning_content'] = $message->reasoningContent;
+        } elseif ($message instanceof AssistantMessage) {
+            $reasoning = $this->reasoningContentFromProviderBlocks($message->providerContentBlocks);
+
+            if (is_string($reasoning) && filled($reasoning)) {
+                $msg['reasoning_content'] = $reasoning;
+            }
         }
 
         if ($message instanceof AssistantMessage && $message->toolCalls->isNotEmpty()) {
@@ -103,6 +109,29 @@ trait MapsMessages
         }
 
         $chatMessages[] = $msg;
+    }
+
+    protected function reasoningContentFromProviderBlocks(mixed $blocks): ?string
+    {
+        if (! is_array($blocks)) {
+            return null;
+        }
+
+        $reasoning = $blocks['reasoning_content'] ?? null;
+
+        if (is_string($reasoning)) {
+            return $reasoning;
+        }
+
+        foreach ($blocks as $block) {
+            if (is_array($block)
+                && ($block['type'] ?? null) === 'reasoning_content'
+                && is_string($block['reasoning_content'] ?? null)) {
+                return $block['reasoning_content'];
+            }
+        }
+
+        return null;
     }
 
     /**

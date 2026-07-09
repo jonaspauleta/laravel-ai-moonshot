@@ -25,8 +25,8 @@ trait BuildsTextRequests
     /**
      * Build the request body for the Chat Completions API.
      *
-     * @param  array<int, mixed>  $messages
-     * @param  array<int, mixed>  $tools
+     * @param  array<mixed>  $messages
+     * @param  array<mixed>  $tools
      * @param  array<string, mixed>|null  $schema
      * @return array<string, mixed>
      */

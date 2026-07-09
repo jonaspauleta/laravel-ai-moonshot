@@ -177,7 +177,7 @@ it('caches formula tool definitions within a single request lifecycle', function
     Http::assertSentCount(1);
 });
 
-// --- Unit: executeToolCalls ---
+// --- Unit: resolveProviderToolCall ---
 
 it('executes a formula tool call via the fibers endpoint and returns the output', function (): void {
     $formulaToolsResponse = [
@@ -219,13 +219,14 @@ it('executes a formula tool call via the fibers endpoint and returns the output'
         resultId: 'call_abc',
     );
 
-    /** @var array<int, ToolResult> $results */
-    $results = callFormulaProtected($gateway, 'executeToolCalls', [$toolCall], [], $provider);
+    /** @var ToolResult|null $result */
+    $result = callFormulaProtected($gateway, 'resolveProviderToolCall', $toolCall, $provider);
 
-    expect($results)->toHaveCount(1);
-    expect($results[0]->name)->toBe('convert');
-    expect($results[0]->result)->toBe('15.0 psi = 1.034 bar');
-    expect($results[0]->id)->toBe('call_abc');
+    expect($result)->not->toBeNull();
+    assert($result instanceof ToolResult);
+    expect($result->name)->toBe('convert');
+    expect($result->result)->toBe('15.0 psi = 1.034 bar');
+    expect($result->id)->toBe('call_abc');
 
     Http::assertSent(function (Request $request): bool {
         if (! str_ends_with($request->url(), '/formulas/moonshot/convert:latest/fibers')) {
@@ -317,15 +318,14 @@ it('drives a Convert formula tool_call round-trip end-to-end (non-streaming)', f
             ->push($secondResponse, 200),
     ]);
 
-    $gateway = formulaGateway();
     $textProvider = formulaTextProvider();
 
-    $response = $gateway->generateText(
+    $response = $textProvider->textGenerationLoop()->generate(
         $textProvider,
         'kimi-k2.6',
         instructions: null,
         messages: [new Message('user', 'Convert 15 psi to bar.')],
-        tools: [new Convert],
+        tools: [new Convert], // @phpstan-ignore argument.type
         options: new TextGenerationOptions(maxSteps: 3),
     );
 
@@ -401,16 +401,15 @@ it('drives a Convert formula tool_call round-trip during streaming', function ()
             ->push($secondSse, 200, ['Content-Type' => 'text/event-stream']),
     ]);
 
-    $gateway = formulaGateway();
     $textProvider = formulaTextProvider();
 
-    $generator = $gateway->streamText(
+    $generator = $textProvider->textGenerationLoop()->stream(
         'inv-conv',
         $textProvider,
         'kimi-k2.6',
         instructions: null,
         messages: [new Message('user', 'Convert 15 psi to bar.')],
-        tools: [new Convert],
+        tools: [new Convert], // @phpstan-ignore argument.type
     );
 
     /** @var array<int, StreamEvent> $events */
@@ -425,4 +424,10 @@ it('drives a Convert formula tool_call round-trip during streaming', function ()
     expect($resultEvents)->toHaveCount(1);
     expect($resultEvents[0]->toolResult->name)->toBe('convert');
     expect($resultEvents[0]->toolResult->result)->toBe('15.0 psi = 1.034 bar');
+
+    $formulaDefinitionRequests = Http::recorded()->filter(
+        static fn (array $pair): bool => str_ends_with((string) $pair[0]->url(), '/formulas/moonshot/convert:latest/tools'),
+    );
+
+    expect($formulaDefinitionRequests)->toHaveCount(1);
 });

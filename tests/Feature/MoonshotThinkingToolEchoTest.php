@@ -98,7 +98,7 @@ it('echoes reasoning_content on the assistant tool_call message in the non-strea
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -152,7 +152,7 @@ it('echoes a fallback reasoning_content on the streaming tool follow-up when no 
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-no-reasoning-tool-follow-up',
         $provider,
         'kimi-k2.6',
@@ -214,7 +214,7 @@ it('fills a non-empty fallback for historical KimiAssistantMessage tool_calls wh
         ]),
     );
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -278,7 +278,7 @@ it('echoes reasoning_content on the assistant tool_call message in the streaming
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-thinking',
         $provider,
         'kimi-k2.6',
@@ -348,7 +348,7 @@ it('omits reasoning_content from the assistant tool_call message when no reasoni
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,

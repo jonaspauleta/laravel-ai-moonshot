@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 use Illuminate\Contracts\JsonSchema\JsonSchema;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Http;
+use Jonaspauleta\LaravelAiMoonshot\Events\TextGenerationStepCompleted;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Messages\Message;
@@ -87,9 +89,11 @@ it('meters the summed token usage across every step of a streaming tool-loop, no
             ->push($step1, 200, ['Content-Type' => 'text/event-stream']),
     ]);
 
+    Event::fake([TextGenerationStepCompleted::class]);
+
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-loop',
         $provider,
         'kimi-k2.6',
@@ -101,10 +105,26 @@ it('meters the summed token usage across every step of a streaming tool-loop, no
     /** @var array<int, StreamEvent> $events */
     $events = iterator_to_array($generator, false);
 
-    // The SDK sums usage across every StreamEnd; the contract is that the WHOLE
-    // run (100+20 then 50+10) is billed, not just the final 50+10 segment.
-    $combined = StreamEnd::combineUsage($events);
+    /** @var array<int, StreamEnd> $streamEnds */
+    $streamEnds = array_values(array_filter(
+        $events,
+        static fn (StreamEvent $event): bool => $event instanceof StreamEnd,
+    ));
+
+    expect($streamEnds)->toHaveCount(1);
+
+    $combined = $streamEnds[0]->usage;
 
     expect($combined->promptTokens)->toBe(150);
     expect($combined->completionTokens)->toBe(30);
+
+    $stepUsages = [];
+
+    Event::assertDispatched(TextGenerationStepCompleted::class, function (TextGenerationStepCompleted $event) use (&$stepUsages): bool {
+        $stepUsages[] = [$event->response->usage->promptTokens, $event->response->usage->completionTokens];
+
+        return true;
+    });
+
+    expect($stepUsages)->toBe([[100, 20], [50, 10]]);
 });

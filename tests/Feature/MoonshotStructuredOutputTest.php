@@ -83,7 +83,7 @@ it('sends response_format with type json_schema and strict:true when a schema is
     $provider = resolve(AiManager::class)->textProvider('moonshot');
     $factory = new JsonSchemaTypeFactory;
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -122,7 +122,7 @@ it('recursively disables additionalProperties on nested object schemas', functio
         ]),
     ];
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -159,7 +159,7 @@ it('decodes the response content into a StructuredTextResponse', function (): vo
     $provider = resolve(AiManager::class)->textProvider('moonshot');
     $factory = new JsonSchemaTypeFactory;
 
-    $response = $provider->textGateway()->generateText(
+    $response = $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -190,7 +190,7 @@ it('falls back to empty structured data when the model returns invalid JSON', fu
     $provider = resolve(AiManager::class)->textProvider('moonshot');
     $factory = new JsonSchemaTypeFactory;
 
-    $response = $provider->textGateway()->generateText(
+    $response = $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -234,7 +234,7 @@ it('keeps response_format on tool-call follow-up requests', function (): void {
     $provider = resolve(AiManager::class)->textProvider('moonshot');
     $factory = new JsonSchemaTypeFactory;
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -276,7 +276,7 @@ it('keeps response_format alongside thinking provider options', function (): voi
         }
     };
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -300,4 +300,33 @@ it('keeps response_format alongside thinking provider options', function (): voi
 
         return true;
     });
+});
+
+it('decodes fenced structured output using the Laravel AI decoder', function (): void {
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')
+        ->push([
+            'id' => 'resp-final',
+            'model' => 'kimi-k2.6',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => "```json\n{\"name\":\"Ada\"}\n```"],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+        ], 200);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+    $factory = new JsonSchemaTypeFactory;
+
+    $response = $provider->textGenerationLoop()->generate(
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new Message('user', 'Pick a name.')],
+        schema: ['name' => $factory->string()],
+    );
+
+    expect($response)->toBeInstanceOf(StructuredTextResponse::class);
+    assert($response instanceof StructuredTextResponse);
+    expect($response->structured)->toBe(['name' => 'Ada']);
 });

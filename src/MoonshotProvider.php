@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Jonaspauleta\LaravelAiMoonshot;
 
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
+use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Providers\Concerns\GeneratesText;
 use Laravel\Ai\Providers\Concerns\HasTextGateway;
 use Laravel\Ai\Providers\Concerns\StreamsText;
@@ -32,9 +33,22 @@ final class MoonshotProvider extends Provider implements TextProvider
         //
     }
 
-    public function textGateway(): TextGateway
+    public function textGateway(): StepTextGateway
     {
         return $this->textGateway ??= new MoonshotGateway($this->events);
+    }
+
+    public function textGenerationLoop(): TextGenerationLoop
+    {
+        if ($this->textGenerationLoop instanceof TextGenerationLoop) {
+            return $this->textGenerationLoop;
+        }
+
+        $gateway = $this->textGateway();
+
+        return $this->textGenerationLoop = $gateway instanceof MoonshotGateway
+            ? new MoonshotTextGenerationLoop($gateway, $this)
+            : new TextGenerationLoop($gateway);
     }
 
     public function defaultTextModel(): string

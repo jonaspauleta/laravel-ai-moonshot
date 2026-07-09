@@ -6,16 +6,17 @@ namespace Jonaspauleta\LaravelAiMoonshot;
 
 use Generator;
 use Illuminate\Contracts\Events\Dispatcher;
-use Laravel\Ai\Contracts\Gateway\TextGateway;
+use Jonaspauleta\LaravelAiMoonshot\Events\TextGenerationStepCompleted;
+use Laravel\Ai\Contracts\Gateway\StepTextGateway;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Gateway\Concerns\HandlesFailoverErrors;
-use Laravel\Ai\Gateway\Concerns\InvokesTools;
 use Laravel\Ai\Gateway\Concerns\ParsesServerSentEvents;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\Providers\Provider;
-use Laravel\Ai\Responses\TextResponse;
 
-final class MoonshotGateway implements TextGateway
+final class MoonshotGateway implements StepTextGateway
 {
     use Concerns\BuildsTextRequests;
     use Concerns\CreatesMoonshotClient;
@@ -26,42 +27,30 @@ final class MoonshotGateway implements TextGateway
     use Concerns\ParsesTextResponses;
     use Concerns\ResolvesFormulaTools;
     use HandlesFailoverErrors;
-    use InvokesTools;
     use ParsesServerSentEvents;
 
-    // why: $events mirrors Laravel\Ai\Gateway\DeepSeek\DeepSeekGateway's
-    // protected Dispatcher — reserved for future event emission. PHPStan flags it
-    // because nothing in this package reads it yet; keeping the parity with the
-    // SDK's own gateways is more valuable than deleting it.
-    /** @phpstan-ignore property.onlyWritten */
     public function __construct(private Dispatcher $events)
     {
-        $this->initializeToolCallbacks();
+        //
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * @param  array<int, mixed>  $messages
-     * @param  array<int, mixed>  $tools
-     * @param  array<string, mixed>|null  $schema
-     */
-    public function generateText(
+    public function beginTextGeneration(): void
+    {
+        $this->resetFormulaState();
+    }
+
+    public function generateTextStep(
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
-    ): TextResponse {
-        // why: the traits type parameters as the concrete Provider base class (matching
-        // how Laravel's own DeepSeek/OpenAi gateways are written), but the public
-        // contract is TextProvider. Every real TextProvider extends Provider.
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
+    ): StepResponse {
         assert($provider instanceof Provider);
-
-        $this->resetFormulaState();
 
         $body = $this->buildTextRequestBody(
             $provider,
@@ -88,38 +77,22 @@ final class MoonshotGateway implements TextGateway
             $data,
             $provider,
             filled($schema),
-            $tools,
-            $schema,
-            $options,
-            $instructions,
-            $messages,
-            $timeout,
         );
     }
 
-    /**
-     * {@inheritdoc}
-     *
-     * @param  array<int, mixed>  $messages
-     * @param  array<int, mixed>  $tools
-     * @param  array<string, mixed>|null  $schema
-     */
-    public function streamText(
+    public function generateStreamStep(
         string $invocationId,
         TextProvider $provider,
         string $model,
         ?string $instructions,
-        array $messages = [],
-        array $tools = [],
-        ?array $schema = null,
-        ?TextGenerationOptions $options = null,
-        ?int $timeout = null,
+        array $messages,
+        array $tools,
+        ?array $schema,
+        ?TextGenerationOptions $options,
+        ?int $timeout,
+        StepContext $stepContext,
     ): Generator {
-        // why: see generateText() — narrow the public contract to the concrete base
-        // class so the traits (which mirror Laravel's own gateway traits) type-check.
         assert($provider instanceof Provider);
-
-        $this->resetFormulaState();
 
         $body = $this->buildTextRequestBody(
             $provider,
@@ -142,20 +115,21 @@ final class MoonshotGateway implements TextGateway
                 ->post('chat/completions', $body),
         );
 
-        yield from $this->processTextStream(
+        $stepResponse = yield from $this->processTextStream(
             $invocationId,
             $provider,
             $model,
-            $tools,
-            $schema,
-            $options,
             $response->toPsrResponse()->getBody(),
-            $instructions,
-            $messages,
-            0,
-            null,
-            [],
-            $timeout,
         );
+
+        if ($stepResponse instanceof StepResponse) {
+            $this->events->dispatch(new TextGenerationStepCompleted(
+                $invocationId,
+                $stepContext,
+                $stepResponse,
+            ));
+        }
+
+        return $stepResponse;
     }
 }
