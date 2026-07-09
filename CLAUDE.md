@@ -106,8 +106,9 @@ through `StepResponse::$structured`; Laravel AI builds the final
 
 - Add embeddings, image generation, audio, or transcription. Moonshot has no
   endpoints for them. Document the gap; do not fake it via OpenAI route shapes.
-- Accept `ProviderTool` subclasses. `MapsTools` throws `RuntimeException` —
-  keep it that way. Moonshot has no provider-side tools (web search, etc.).
+- Accept unsupported `ProviderTool` subclasses. `MapsTools` supports the SDK's
+  `WebSearch` and `MoonshotFormulaTool` subclasses, including Convert and Fetch.
+  It must throw `UnsupportedProviderToolException` for every other provider tool.
 - Publish a `config/moonshot.php`. Configuration lives under
   `config('ai.providers.moonshot')` — that is the SDK convention.
 - Reintroduce Prism. The package targets `laravel/ai` only. The Prism
