@@ -34,7 +34,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 | Document Q&A                                | Supported via Moonshot Files API                |
 | Thinking mode (Kimi reasoning)              | Supported                                       |
 | Structured output                           | Supported — `response_format: json_schema`, strict mode (MFJS) |
-| Provider tools                              | `$web_search`, Convert, and Fetch supported      |
+| Provider-hosted tools                       | `$web_search` only; Convert and Fetch use Moonshot's Formulas API |
 | Embeddings                                  | Not supported                                   |
 | Image generation / audio / transcription / reranking | Not supported                          |
 
@@ -522,7 +522,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 
 - **Embeddings** — Moonshot has no embeddings endpoint.
 - **Image generation, audio, transcription, reranking** — text only.
-- **Provider tools** other than `WebSearch` (e.g. `WebFetch`, `FileSearch`) — throws `UnsupportedProviderToolException` if passed. `WebSearch` itself is supported via Moonshot's `$web_search` builtin (see [Web search](#web-search)).
+- **Provider-hosted tools** other than `WebSearch` (e.g. `WebFetch`, `FileSearch`) — throws `UnsupportedProviderToolException` if passed. `WebSearch` is supported via Moonshot's `$web_search` builtin, while this package's `Convert` and `Fetch` tools run separately through Moonshot's Formulas API.
 - **Document attachments via the SDK's generic `Document` contract** — use `withMoonshotFile()` or the `MoonshotFiles` service instead, which goes through Moonshot's `/v1/files` extraction endpoint (see [Document Q&A](#document-qa-pdf-doc-xlsx-)).
 
 ## Troubleshooting

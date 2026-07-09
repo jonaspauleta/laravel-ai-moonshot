@@ -82,10 +82,10 @@ trait ParsesTextResponses
                 is_string($data['model'] ?? null) ? $data['model'] : '',
             ),
             structured: $structuredData,
-            providerContentBlocks: $reasoning !== '' ? [[
-                'type' => 'reasoning_content',
+            // @phpstan-ignore argument.type (Laravel AI 0.9 types provider blocks as a list)
+            providerContentBlocks: $reasoning !== '' ? [
                 'reasoning_content' => $reasoning,
-            ]] : [],
+            ] : [],
         );
     }
 

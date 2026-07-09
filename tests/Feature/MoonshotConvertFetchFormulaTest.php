@@ -352,6 +352,105 @@ it('drives a Convert formula tool_call round-trip end-to-end (non-streaming)', f
     });
 });
 
+it('drives a Fetch formula tool_call round-trip end-to-end', function (): void {
+    $formulaToolsResponse = [
+        'object' => 'list',
+        'tools' => [[
+            'type' => 'function',
+            'function' => [
+                'name' => 'fetch',
+                'description' => 'Fetch a URL.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => ['url' => ['type' => 'string']],
+                    'required' => ['url'],
+                ],
+            ],
+        ]],
+    ];
+
+    $firstResponse = [
+        'id' => 'resp-fetch-1',
+        'model' => 'kimi-k2.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => [
+                'role' => 'assistant',
+                'content' => null,
+                'tool_calls' => [[
+                    'id' => 'call_fetch',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'fetch',
+                        'arguments' => '{"url":"https://example.com"}',
+                    ],
+                ]],
+            ],
+            'finish_reason' => 'tool_calls',
+        ]],
+        'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 4],
+    ];
+
+    $fibersResponse = [
+        'status' => 'succeeded',
+        'context' => ['output' => '# Example Domain'],
+    ];
+
+    $secondResponse = [
+        'id' => 'resp-fetch-2',
+        'model' => 'kimi-k2.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'The page is Example Domain.'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 6],
+    ];
+
+    Http::fake([
+        'api.moonshot.ai/v1/formulas/moonshot/fetch:latest/tools' => Http::response($formulaToolsResponse, 200),
+        'api.moonshot.ai/v1/formulas/moonshot/fetch:latest/fibers' => Http::response($fibersResponse, 200),
+        'api.moonshot.ai/v1/chat/completions' => Http::sequence()
+            ->push($firstResponse, 200)
+            ->push($secondResponse, 200),
+    ]);
+
+    $textProvider = formulaTextProvider();
+    $response = $textProvider->textGenerationLoop()->generate(
+        $textProvider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new Message('user', 'Read https://example.com.')],
+        tools: [new Fetch], // @phpstan-ignore argument.type
+        options: new TextGenerationOptions(maxSteps: 3),
+    );
+
+    expect($response->text)->toBe('The page is Example Domain.');
+
+    $recorded = Http::recorded();
+    $definitionRequests = $recorded->filter(
+        static fn (array $pair): bool => str_ends_with((string) $pair[0]->url(), '/formulas/moonshot/fetch:latest/tools'),
+    );
+    $chatRequests = $recorded->filter(
+        static fn (array $pair): bool => str_ends_with((string) $pair[0]->url(), '/v1/chat/completions'),
+    )->values();
+
+    expect($definitionRequests)->toHaveCount(1)
+        ->and($chatRequests)->toHaveCount(2);
+
+    $secondChatRequest = $chatRequests->get(1);
+    assert(is_array($secondChatRequest));
+
+    $messages = $secondChatRequest[0]->data()['messages'] ?? [];
+    $toolMessage = is_array($messages)
+        ? array_find($messages, static fn (mixed $message): bool => is_array($message) && ($message['role'] ?? null) === 'tool')
+        : null;
+
+    expect($toolMessage)->toBeArray()
+        ->and($toolMessage['tool_call_id'] ?? null)->toBe('call_fetch')
+        ->and($toolMessage['content'] ?? null)->toBe('# Example Domain');
+});
+
 // --- End-to-end: streaming ---
 
 it('drives a Convert formula tool_call round-trip during streaming', function (): void {

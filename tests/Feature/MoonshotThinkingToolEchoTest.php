@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Event;
+use Jonaspauleta\LaravelAiMoonshot\Events\TextGenerationStepCompleted;
 use Jonaspauleta\LaravelAiMoonshot\Messages\KimiAssistantMessage;
 use Laravel\Ai\AiManager;
 use Laravel\Ai\Enums\Lab;
@@ -276,6 +278,8 @@ it('echoes reasoning_content on the assistant tool_call message in the streaming
         ->push($firstSse, 200, ['Content-Type' => 'text/event-stream'])
         ->push($secondSse, 200, ['Content-Type' => 'text/event-stream']);
 
+    Event::fake([TextGenerationStepCompleted::class]);
+
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
     $generator = $provider->textGenerationLoop()->stream(
@@ -288,6 +292,25 @@ it('echoes reasoning_content on the assistant tool_call message in the streaming
     );
 
     iterator_to_array($generator, false);
+
+    $providerContentBlocks = null;
+
+    Event::assertDispatched(
+        TextGenerationStepCompleted::class,
+        static function (TextGenerationStepCompleted $event) use (&$providerContentBlocks): bool {
+            if ($event->context->stepNumber !== 0) {
+                return false;
+            }
+
+            $providerContentBlocks = $event->response->providerContentBlocks;
+
+            return true;
+        },
+    );
+
+    expect($providerContentBlocks)->toBe([
+        'reasoning_content' => 'Searching the web…',
+    ]);
 
     Http::assertSent(function (Request $request): bool {
         if (! str_ends_with($request->url(), '/v1/chat/completions')) {

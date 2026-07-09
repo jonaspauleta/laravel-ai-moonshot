@@ -219,10 +219,10 @@ trait HandlesTextStreaming
             finishReason: $this->extractFinishReason(['finish_reason' => $finishReason ?? '']),
             usage: $usage ?? new Usage,
             meta: new Meta($provider->name(), $responseModel),
-            providerContentBlocks: $currentReasoning !== '' ? [[
-                'type' => 'reasoning_content',
+            // @phpstan-ignore argument.type (Laravel AI 0.9 types provider blocks as a list)
+            providerContentBlocks: $currentReasoning !== '' ? [
                 'reasoning_content' => $currentReasoning,
-            ]] : [],
+            ] : [],
         );
     }
 
