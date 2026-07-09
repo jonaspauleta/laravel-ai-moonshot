@@ -68,11 +68,12 @@ it('echoes $web_search arguments back as ToolResult content', function (): void 
         resultId: 'call_1',
     );
 
-    /** @var array<int, ToolResult> $results */
-    $results = callBuiltinToolsProtected($gateway, 'executeToolCalls', [$toolCall], [], builtinToolsProvider());
+    /** @var ToolResult|null $result */
+    $result = callBuiltinToolsProtected($gateway, 'resolveProviderToolCall', $toolCall, builtinToolsProvider());
 
-    expect($results)->toHaveCount(1);
-    expect($results[0]->name)->toBe('$web_search');
-    expect($results[0]->result)->toBe('{"query":"15 psi to bar"}');
-    expect($results[0]->id)->toBe('call_1');
+    expect($result)->not->toBeNull();
+    assert($result instanceof ToolResult);
+    expect($result->name)->toBe('$web_search');
+    expect($result->result)->toBe('{"query":"15 psi to bar"}');
+    expect($result->id)->toBe('call_1');
 });

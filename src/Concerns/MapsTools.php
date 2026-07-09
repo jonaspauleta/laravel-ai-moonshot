@@ -12,6 +12,7 @@ use Laravel\Ai\ObjectSchema;
 use Laravel\Ai\Providers\Provider;
 use Laravel\Ai\Providers\Tools\ProviderTool;
 use Laravel\Ai\Providers\Tools\WebSearch;
+use Laravel\Ai\Tools\ToolNameResolver;
 
 trait MapsTools
 {
@@ -31,7 +32,7 @@ trait MapsTools
      * - Other ProviderTool subclasses → throws UnsupportedProviderToolException.
      * - Plain Tool instances → mapped via mapTool().
      *
-     * @param  array<int, mixed>  $tools
+     * @param  array<mixed>  $tools
      * @return array<int, array<string, mixed>>
      */
     protected function mapTools(array $tools, Provider $provider, ?int $timeout = null): array
@@ -110,7 +111,7 @@ trait MapsTools
         return [
             'type' => 'function',
             'function' => [
-                'name' => class_basename($tool),
+                'name' => ToolNameResolver::resolve($tool),
                 'description' => (string) $tool->description(),
                 'parameters' => [
                     'type' => 'object',

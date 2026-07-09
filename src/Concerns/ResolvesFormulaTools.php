@@ -12,8 +12,7 @@ trait ResolvesFormulaTools
     /**
      * Per-request registry: formula function name → formula URI.
      *
-     * Reset at the start of every generateText()/streamText() call to prevent
-     * Octane memory leaks — the gateway instance is reused across requests.
+     * Reset at the start of every generation loop to prevent Octane memory leaks.
      *
      * @var array<string, string>
      */
@@ -30,7 +29,7 @@ trait ResolvesFormulaTools
     private array $formulaToolDefinitionsCache = [];
 
     /**
-     * Reset formula state at the start of each request.
+     * Reset formula state at the start of each generation.
      */
     protected function resetFormulaState(): void
     {

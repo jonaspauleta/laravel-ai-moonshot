@@ -7,7 +7,7 @@
 
 [Moonshot AI](https://platform.moonshot.ai/) (Kimi K2) provider for the official [Laravel AI SDK](https://github.com/laravel/ai).
 
-Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/completions`), so this driver plugs directly into the SDK's `TextProvider` / `TextGateway` contracts and behaves like any first-party provider — `agent()`, `Ai::textProvider()`, agent classes with `#[Provider]` attributes, streaming, tool calling, broadcasting, and queued prompts all work out of the box.
+Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/completions`), so this driver plugs directly into the SDK's `TextProvider` / `StepTextGateway` contracts and behaves like any first-party provider. Agent classes, streaming, tool calling, broadcasting, and queued prompts work through Laravel AI's `TextGenerationLoop`.
 
 ## Features
 
@@ -21,7 +21,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 - ✅ Multi-turn reasoning persistence (`thinking.keep = all`)
 - ✅ Per-tier model overrides (`default`, `cheapest`, `smartest`)
 - ✅ Custom base URL (proxy / self-hosted compatible)
-- ✅ PHPStan level max, Pest 3 / 4, Pint, Rector — full quality pipeline
+- ✅ PHPStan level max, Pest 4, Pint, Rector
 
 ## Capability matrix
 
@@ -34,13 +34,13 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 | Document Q&A                                | Supported via Moonshot Files API                |
 | Thinking mode (Kimi reasoning)              | Supported                                       |
 | Structured output                           | Supported — `response_format: json_schema`, strict mode (MFJS) |
-| Provider tools (file search, web fetch, …)  | Not supported (web search supported separately) |
+| Provider-hosted tools                       | `$web_search` only; Convert and Fetch use Moonshot's Formulas API |
 | Embeddings                                  | Not supported                                   |
 | Image generation / audio / transcription / reranking | Not supported                          |
 
 > **Limitations:** no embeddings, no image generation, no audio/transcription/reranking, no provider-hosted tools other than Moonshot's `$web_search` builtin (see [Web search](#web-search)), and documents must use the Moonshot Files API (`withMoonshotFile()` / `MoonshotFiles`) instead of Laravel AI generic `Document` attachments. See [Not supported](#not-supported) for details.
 
-> **Package maturity:** this package tracks the evolving `laravel/ai` SDK, which is still on `0.x`. New `laravel/ai` minor versions are adopted only after a compatibility review and ship as a minor release here. See [Versioning](#versioning).
+> **Package maturity:** this package tracks the evolving `laravel/ai` SDK, which is still on `0.x`. New `laravel/ai` minor versions are adopted only after a compatibility review and may require a package major. See [Versioning](#versioning).
 
 ## Requirements
 
@@ -48,9 +48,9 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 |------------------|--------------------|
 | PHP              | `^8.4` (8.4, 8.5)  |
 | Laravel          | `12.x \| 13.x`     |
-| `laravel/ai`     | `~0.6.3`           |
+| `laravel/ai`     | `^0.9.0`           |
 
-`laravel/ai 0.6.x` requires `illuminate/* ^12.0|^13.0`, so Laravel 11 is not supported. CI exercises every PHP × Laravel combination above on each push and PR.
+`laravel/ai 0.9.x` requires `illuminate/* ^12.0|^13.0`, so Laravel 11 is not supported. CI exercises every PHP × Laravel combination above on each push and PR.
 
 ## Installation
 
@@ -147,16 +147,16 @@ To make Moonshot the default provider for the whole application:
 
 ## How it works
 
-This package ships a single Laravel AI SDK provider — `MoonshotProvider` — backed by `MoonshotGateway`, a `TextGateway` that calls Moonshot's OpenAI-compatible `POST /v1/chat/completions` endpoint. Registration happens in `MoonshotServiceProvider::boot()` via `AiManager::extend('moonshot', …)`, so the driver string `'moonshot'` resolves to a real provider anywhere the SDK looks one up (`agent(provider: 'moonshot')`, `Ai::textProvider('moonshot')`, the `#[Provider('moonshot')]` attribute, etc.).
+This package ships `MoonshotProvider`, backed by a `MoonshotGateway` that implements Laravel AI 0.9's `StepTextGateway`. Each gateway call performs one `POST /v1/chat/completions` step and returns a `StepResponse`. Laravel AI's `TextGenerationLoop` owns multi-step orchestration, while `MoonshotTextGenerationLoop` only resolves Moonshot's `$web_search`, Convert, and Fetch calls alongside ordinary Laravel AI tools.
 
 Streaming reads the SSE body chunk-by-chunk and maps Moonshot's payload to the SDK's stream events:
 
 - `delta.content` → `TextStart` / `TextDelta` / `TextEnd`
 - `delta.reasoning_content` → `ReasoningStart` / `ReasoningDelta` / `ReasoningEnd` (Kimi thinking mode)
-- `delta.tool_calls` → buffered, then `ToolCall` + `ToolResult` after `finish_reason: tool_calls`
-- `usage` chunk → `StreamEnd` payload
+- `delta.tool_calls` → buffered, then `ToolCall`; the generation loop emits `ToolResult`
+- step usage → one cumulative terminal `StreamEnd` from Laravel AI's generation loop
 
-`ReasoningEnd` is guaranteed to fire before the first `TextStart` when the model transitions out of thinking. Multi-step tool loops are continued internally up to `TextGenerationOptions::$maxSteps` (default `ceil(count(tools) * 1.5)`).
+`ReasoningEnd` fires before the first `TextStart` when the model transitions out of thinking. The gateway emits `TextGenerationStepCompleted` after each completed streamed step so cancellation metering can observe step usage without adding another `StreamEnd`.
 
 ## Usage
 
@@ -522,7 +522,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 
 - **Embeddings** — Moonshot has no embeddings endpoint.
 - **Image generation, audio, transcription, reranking** — text only.
-- **Provider tools** other than `WebSearch` (e.g. `WebFetch`, `FileSearch`) — throws `UnsupportedProviderToolException` if passed. `WebSearch` itself is supported via Moonshot's `$web_search` builtin (see [Web search](#web-search)).
+- **Provider-hosted tools** other than `WebSearch` (e.g. `WebFetch`, `FileSearch`) — throws `UnsupportedProviderToolException` if passed. `WebSearch` is supported via Moonshot's `$web_search` builtin, while this package's `Convert` and `Fetch` tools run separately through Moonshot's Formulas API.
 - **Document attachments via the SDK's generic `Document` contract** — use `withMoonshotFile()` or the `MoonshotFiles` service instead, which goes through Moonshot's `/v1/files` extraction endpoint (see [Document Q&A](#document-qa-pdf-doc-xlsx-)).
 
 ## Troubleshooting
@@ -535,7 +535,7 @@ The Moonshot API does not expose endpoints for the following capabilities at the
 | `UnsupportedProviderToolException: Moonshot does not support [WebFetch] provider tools.`       | You passed an unsupported `ProviderTool` subclass (e.g. `WebFetch`, `FileSearch`). For web search use `Laravel\Ai\Providers\Tools\WebSearch` (mapped to Moonshot's `$web_search` builtin). For everything else, use plain function tools. |
 | Document attachment via SDK's generic `Document` is silently ignored or rejected               | Generic `Document` attachments are intentionally unsupported. Use `withMoonshotFile()` (or the `MoonshotFiles` service) — this routes through Moonshot's Files API, which performs server-side extraction. See [Document Q&A](#document-qa-pdf-doc-xlsx-). |
 | HTTP 400 with structured outputs (e.g. `unsupported keyword`)                                 | Moonshot's strict mode requires [MFJS](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md) — a JSON-Schema subset. Drop unsupported keywords (`format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`, etc.) from your schema. See [Structured output](#structured-output).                                            |
-| Streaming hangs on long thinking-mode responses                                               | Default per-request timeout is 60s. Pass `timeout:` to `streamText()` or raise it in the gateway's HTTP client invocation.                                |
+| Streaming hangs on long thinking-mode responses                                               | Default per-request timeout is 60s. Pass `timeout:` to the SDK's `stream()` call or raise it in the gateway's HTTP client invocation.                    |
 | `Http::fake()` in tests does not intercept the request                                        | Fake key must include the full base URL: `'api.moonshot.ai/v1/chat/completions' => Http::response(...)`. The Laravel HTTP client applies the base URL.    |
 | `MoonshotFilesException: ... extraction failed for [file-...]`                                | Moonshot could not extract text from the uploaded file. Check the file is one of the [supported formats](https://platform.kimi.ai/docs/api/files) and not corrupted. Inspect status via `php artisan ai:moonshot:files`. |
 | `MoonshotFilesException: Moonshot Files API quota exceeded`                                  | You hit the 1,000-files / 10 GB account limit, or per-minute rate limit at peak. Delete unused files via `php artisan ai:moonshot:files --delete=<id>`. |
@@ -556,8 +556,8 @@ CI runs Pint, Rector (dry-run), PHPStan, and Pest on every push and PR — see [
 
 This package follows [Semantic Versioning](https://semver.org/), but the upstream `laravel/ai` SDK is still on `0.x` — its minor bumps may include breaking changes. To keep our SemVer promise honest:
 
-- We pin to a specific `laravel/ai` minor: `composer.json` requires `~0.6.3` (allows `0.6.x` patches but **not** `0.7.0`).
-- Each new `laravel/ai` minor (`0.7`, `0.8`, …) lands in this package as one of our minor releases after a compatibility audit.
+- We pin to a specific `laravel/ai` minor: `composer.json` requires `^0.9.0` (allows `0.9.x` patches but not `0.10.0`).
+- Each new `laravel/ai` minor lands after a compatibility audit. Breaking SDK migrations may require a new package major.
 - Truly breaking changes here (renaming public classes, removing a public method, dropping a PHP version) bump our **major**.
 
 If `laravel/ai` reaches `1.0.0` we will widen the constraint to `^1.0` and follow standard SemVer ranges.

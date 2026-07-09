@@ -80,7 +80,7 @@ it('echoes reasoning_content from a KimiAssistantMessage in the outgoing chat bo
         ]),
     );
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -133,7 +133,7 @@ it('fills a placeholder reasoning_content when KimiAssistantMessage has empty re
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -189,7 +189,7 @@ it('plain AssistantMessage history still does not emit reasoning_content', funct
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $provider->textGateway()->generateText(
+    $provider->textGenerationLoop()->generate(
         $provider,
         'kimi-k2.6',
         instructions: null,
@@ -226,4 +226,116 @@ it('plain AssistantMessage history still does not emit reasoning_content', funct
 
         return false;
     });
+});
+
+it('echoes reasoning_content from a plain AssistantMessage provider content block', function (): void {
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')->push([
+        'id' => 'resp-final',
+        'model' => 'kimi-k2.6',
+        'choices' => [[
+            'index' => 0,
+            'message' => ['role' => 'assistant', 'content' => 'ok'],
+            'finish_reason' => 'stop',
+        ]],
+        'usage' => ['prompt_tokens' => 1, 'completion_tokens' => 1],
+    ], 200);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+    $assistant = new AssistantMessage(
+        '',
+        new Collection([new ToolCall(id: 'c1', name: 'NoOp', arguments: [], resultId: 'c1')]),
+        ['reasoning_content' => 'Reasoned by Kimi.'], // @phpstan-ignore argument.type
+    );
+
+    $provider->textGenerationLoop()->generate(
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [
+            new UserMessage('Anything?'),
+            $assistant,
+            new ToolResultMessage(new Collection([
+                new ToolResult(id: 'c1', name: 'NoOp', arguments: [], result: '{}', resultId: 'c1'),
+            ])),
+            new UserMessage('Now?'),
+        ],
+    );
+
+    Http::assertSent(function (Request $request): bool {
+        $messages = $request->data()['messages'] ?? [];
+        $assistantMessage = is_array($messages)
+            ? array_find($messages, static fn (mixed $message): bool => is_array($message) && isset($message['tool_calls']))
+            : null;
+
+        return is_array($assistantMessage)
+            && ($assistantMessage['reasoning_content'] ?? null) === 'Reasoned by Kimi.';
+    });
+});
+
+it('keeps generated reasoning in the associative provider block through a tool round trip', function (): void {
+    Http::fakeSequence('api.moonshot.ai/v1/chat/completions')
+        ->push([
+            'id' => 'resp-tools',
+            'model' => 'kimi-k2.6',
+            'choices' => [[
+                'index' => 0,
+                'message' => [
+                    'role' => 'assistant',
+                    'content' => '',
+                    'reasoning_content' => 'I should search for the latest result.',
+                    'tool_calls' => [[
+                        'id' => 'call_search',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => '$web_search',
+                            'arguments' => '{"query":"latest F1 result"}',
+                        ],
+                    ]],
+                ],
+                'finish_reason' => 'tool_calls',
+            ]],
+            'usage' => ['prompt_tokens' => 10, 'completion_tokens' => 5],
+        ], 200)
+        ->push([
+            'id' => 'resp-final',
+            'model' => 'kimi-k2.6',
+            'choices' => [[
+                'index' => 0,
+                'message' => ['role' => 'assistant', 'content' => 'The latest result is available.'],
+                'finish_reason' => 'stop',
+            ]],
+            'usage' => ['prompt_tokens' => 20, 'completion_tokens' => 6],
+        ], 200);
+
+    $provider = resolve(AiManager::class)->textProvider('moonshot');
+
+    $response = $provider->textGenerationLoop()->generate(
+        $provider,
+        'kimi-k2.6',
+        instructions: null,
+        messages: [new UserMessage('Find the latest F1 result.')],
+        options: new ReplayThinkingOptions(maxSteps: 3),
+    );
+
+    $generatedAssistant = $response->messages->first(
+        static fn (Message $message): bool => $message instanceof AssistantMessage && $message->toolCalls->isNotEmpty(),
+    );
+
+    expect($generatedAssistant)->toBeInstanceOf(AssistantMessage::class);
+    assert($generatedAssistant instanceof AssistantMessage);
+    expect($generatedAssistant->providerContentBlocks)->toBe([
+        'reasoning_content' => 'I should search for the latest result.',
+    ]);
+
+    $recorded = Http::recorded();
+    expect($recorded)->toHaveCount(2);
+    assert($recorded[1] !== null);
+
+    $messages = $recorded[1][0]->data()['messages'] ?? [];
+    $assistantMessage = is_array($messages)
+        ? array_find($messages, static fn (mixed $message): bool => is_array($message) && isset($message['tool_calls']))
+        : null;
+
+    expect($assistantMessage)->toBeArray()
+        ->and($assistantMessage['reasoning_content'] ?? null)->toBe('I should search for the latest result.');
 });

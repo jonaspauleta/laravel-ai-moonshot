@@ -5,6 +5,41 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-07-09
+
+### Added
+
+- Laravel AI 0.9 `StepTextGateway` support through single-step text and stream gateway methods.
+- `MoonshotTextGenerationLoop` for `$web_search`, Convert, and Fetch calls alongside ordinary Laravel AI tools.
+- `TextGenerationStepCompleted`, a non-stream event that exposes completed streamed-step usage for cancellation metering.
+- Replay of Kimi reasoning from standard `AssistantMessage` provider content blocks while retaining `KimiAssistantMessage`.
+
+### Changed
+
+- Require `laravel/ai ^0.9.0` and Pest 4.
+- Delegate multi-step orchestration and the single cumulative terminal `StreamEnd` to Laravel AI's `TextGenerationLoop`.
+- Use `ToolNameResolver` for ordinary function tool names.
+- Decode fenced structured JSON through Laravel AI's structured-output decoder.
+- Fetch Formula definitions once per complete generation.
+
+## [1.4.3] - 2026-06-30
+
+### Fixed
+
+- Keep command `$signature` and `$description` properties for Laravel 12 compatibility while using command attributes on Laravel 13.
+
+## [1.4.2] - 2026-06-30
+
+### Changed
+
+- Add Laravel 13 command attributes to the Moonshot model and file commands.
+
+## [1.4.1] - 2026-06-30
+
+### Fixed
+
+- Sum token usage across every step of a streamed tool loop instead of reporting only the final segment.
+
 ## [1.4.0] - 2026-05-19
 
 ### Added

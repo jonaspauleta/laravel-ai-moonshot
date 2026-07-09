@@ -52,7 +52,7 @@ it('streams text deltas from a chat completions SSE response', function (): void
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-1',
         $provider,
         'kimi-k2.6',
@@ -93,7 +93,7 @@ it('emits reasoning events when the model returns reasoning_content deltas', fun
 
     $provider = resolve(AiManager::class)->textProvider('moonshot');
 
-    $generator = $provider->textGateway()->streamText('inv-2', $provider, 'kimi-k2.6', null, [new Message('user', 'Hi')]);
+    $generator = $provider->textGenerationLoop()->stream('inv-2', $provider, 'kimi-k2.6', null, [new Message('user', 'Hi')]);
 
     /** @var array<int, StreamEvent> $events */
     $events = iterator_to_array($generator, false);
@@ -133,7 +133,7 @@ it('sends response_format json_schema in streaming requests when a schema is pro
     $provider = resolve(AiManager::class)->textProvider('moonshot');
     $factory = new JsonSchemaTypeFactory;
 
-    $generator = $provider->textGateway()->streamText(
+    $generator = $provider->textGenerationLoop()->stream(
         'inv-schema',
         $provider,
         'kimi-k2.6',

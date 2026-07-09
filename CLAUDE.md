@@ -11,24 +11,35 @@ One registration path. `MoonshotServiceProvider::boot()` calls
 `MoonshotProvider` (`extends Laravel\Ai\Providers\Provider implements TextProvider`).
 
 `MoonshotProvider` uses three SDK traits (`GeneratesText`, `HasTextGateway`,
-`StreamsText`) and lazily constructs a single `MoonshotGateway` instance.
+`StreamsText`) and lazily constructs a single `MoonshotGateway` instance. It
+returns `MoonshotTextGenerationLoop` for the real gateway and Laravel AI's
+standard `TextGenerationLoop` for injected fake gateways.
 
-`MoonshotGateway` (`implements Laravel\Ai\Contracts\Gateway\TextGateway`) is the
-HTTP layer. Behavior is split across local traits in `src/Concerns/`, mirroring
-how `Laravel\Ai\Gateway\DeepSeek\DeepSeekGateway` is composed:
+`MoonshotGateway` implements `Laravel\Ai\Contracts\Gateway\StepTextGateway`.
+`generateTextStep()` and `generateStreamStep()` each perform one provider step
+and return a `StepResponse`. The gateway never orchestrates tool recursion.
+Behavior is split across local traits in `src/Concerns/`:
 
 - `BuildsTextRequests` — request body assembly. Composes instructions + schema,
   maps messages, maps tools, merges `providerOptions(driver)` verbatim into the
   body (this is how Kimi `thinking` payloads reach Moonshot).
 - `CreatesMoonshotClient` — `Http::baseUrl(...)->withToken(...)->throw()`.
 - `HandlesTextStreaming` — SSE chunk loop. Yields `StreamStart`, `Reasoning*`,
-  `Text*`, `ToolCall`, `ToolResult`, `StreamEnd` from the SDK. Recurses on
-  `finish_reason: tool_calls` up to `maxSteps`.
+  `Text*`, and `ToolCall`, then returns the step's `StepResponse`.
 - `MapsAttachments`, `MapsMessages`, `MapsTools`, `ParsesTextResponses` —
   protocol shape conversion to/from OpenAI chat schema.
 
-Plus three SDK-shipped traits: `HandlesFailoverErrors`, `InvokesTools`,
+Plus two SDK-shipped traits: `HandlesFailoverErrors` and
 `ParsesServerSentEvents`.
+
+`MoonshotTextGenerationLoop` extends Laravel AI's `TextGenerationLoop`. It
+resolves `$web_search` and Formula calls while delegating ordinary `Tool`
+execution to the SDK behavior. The loop resets Formula definitions once per
+generation, not once per provider step.
+
+Streaming has one terminal `StreamEnd`, emitted by Laravel AI with cumulative
+usage. `TextGenerationStepCompleted` is dispatched after each completed gateway
+step for cancellation metering and is not part of the stream event sequence.
 
 ## Type-safety
 
@@ -55,13 +66,12 @@ code.
   `catalog-drift` GitHub workflow polls `GET /v1/models` and opens an issue
   if any default disappears. Always allow override via
   `config/ai.php` → `providers.moonshot.models.text.{default,cheapest,smartest}`.
-- **`MoonshotGateway::$events` is unused on purpose** (`@phpstan-ignore property.onlyWritten`).
-  Kept for parity with upstream `DeepSeekGateway`. If you start emitting events,
-  drop the ignore comment.
+- **Provider options are merged into every step body.** Do not move them to the
+  generation loop or only apply them on the first request.
 
 ## Structured outputs
 
-Schemas passed via `TextGateway::generateText()`'s `?array $schema` (typically
+Schemas passed through `TextGenerationLoop::generate()`'s `?array $schema` (typically
 from an agent implementing `Laravel\Ai\Contracts\HasStructuredOutput` or via
 `Laravel\Ai\StructuredAnonymousAgent`) become a Moonshot Chat-Completions
 `response_format` envelope:
@@ -73,12 +83,10 @@ response_format: {
 }
 ```
 
-`strict` is hard-coded to `true` — matches upstream `OpenAi` gateway in
-`laravel/ai` 0.6.x, and Moonshot's docs explicitly recommend `json_schema` over
-the older `json_object` mode. Three call sites emit this envelope and must stay
-in sync: `BuildsTextRequests::buildTextRequestBody()`, the tool-follow-up body
-in `ParsesTextResponses` (the recursive `continueWithToolResults` path), and
-`HandlesTextStreaming` for streaming requests.
+`strict` is hard-coded to `true`, and Moonshot's docs explicitly recommend
+`json_schema` over the older `json_object` mode.
+`BuildsTextRequests::buildTextRequestBody()` emits this envelope for every step,
+including tool follow-ups and streams.
 
 **Schemas must be MFJS-compatible** (Moonshot Flavored JSON Schema —
 [spec](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md)).
@@ -90,15 +98,17 @@ not sanitize.
 
 Streaming structured outputs send the same envelope; SDK has no
 `ObjectStart`/`ObjectDelta`/`ObjectEnd` events, so callers accumulate
-`TextDelta`s and `json_decode` themselves. Non-streaming wraps the decoded
-content into `StructuredTextResponse` automatically via `ParsesTextResponses`.
+`TextDelta`s and `json_decode` themselves. Non-streaming returns decoded data
+through `StepResponse::$structured`; Laravel AI builds the final
+`StructuredTextResponse`.
 
 ## Do not
 
 - Add embeddings, image generation, audio, or transcription. Moonshot has no
   endpoints for them. Document the gap; do not fake it via OpenAI route shapes.
-- Accept `ProviderTool` subclasses. `MapsTools` throws `RuntimeException` —
-  keep it that way. Moonshot has no provider-side tools (web search, etc.).
+- Accept unsupported `ProviderTool` subclasses. `MapsTools` supports the SDK's
+  `WebSearch` and `MoonshotFormulaTool` subclasses, including Convert and Fetch.
+  It must throw `UnsupportedProviderToolException` for every other provider tool.
 - Publish a `config/moonshot.php`. Configuration lives under
   `config('ai.providers.moonshot')` — that is the SDK convention.
 - Reintroduce Prism. The package targets `laravel/ai` only. The Prism
