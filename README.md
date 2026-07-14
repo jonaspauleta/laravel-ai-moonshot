@@ -33,7 +33,7 @@ Moonshot's API is OpenAI-compatible (`POST https://api.moonshot.ai/v1/chat/compl
 | Image input                                 | Supported                                       |
 | Document Q&A                                | Supported via Moonshot Files API                |
 | Thinking mode (Kimi reasoning)              | Supported                                       |
-| Structured output                           | Supported — `response_format: json_schema`, strict mode (MFJS) |
+| Structured output                           | Supported — `response_format: json_schema`, strict mode (MFJS); deferred until after the tool loop when tools are present |
 | Provider-hosted tools                       | `$web_search` only; Convert and Fetch use Moonshot's Formulas API |
 | Embeddings                                  | Not supported                                   |
 | Image generation / audio / transcription / reranking | Not supported                          |
@@ -324,7 +324,29 @@ Or for one-offs, use `StructuredAnonymousAgent` directly (see the [Laravel AI SD
 
 > **MFJS limitations.** Moonshot's strict mode requires [MFJS](https://github.com/MoonshotAI/walle/blob/main/docs/mfjs-spec.zh.md) — a JSON-Schema subset. Unsupported keywords include `format`, `pattern`, `oneOf`, `allOf`, `minLength`/`maxLength`, `minimum`/`maximum`, `title`, `$comment`, and `prefixItems`. Schemas are passed through verbatim — Moonshot returns HTTP 400 on incompatible keywords.
 
-> **Streaming.** Streaming + schema also sends `response_format: json_schema`. The SDK does not emit `ObjectDelta` events — accumulate `TextDelta`s and `json_decode` at `StreamEnd`. Non-streaming returns a decoded `StructuredTextResponse` automatically.
+> **Streaming.** Streaming + schema sends `response_format: json_schema` on tool-free requests. The SDK does not emit `ObjectDelta` events — accumulate `TextDelta`s and `json_decode` at `StreamEnd`. Non-streaming returns a decoded `StructuredTextResponse` automatically.
+
+#### Tools + structured output (deferred `json_schema`)
+
+Do **not** rely on `tools` and a strict `response_format` landing on the same request for Kimi. When both are present, Kimi frequently returns an empty schema-valid JSON object and never invokes a tool (observed in production on `kimi-k2.6`).
+
+The gateway therefore defers structured output by default when an agent combines tools with `HasStructuredOutput`:
+
+1. Tool-loop steps send `tools` + `tool_choice: auto` and **omit** `response_format`. The SDK's schema instructions stay in the system prompt, so the model keeps steering toward the schema.
+2. After the tool loop settles, `MoonshotTextGenerationLoop` appends one final tool-free request with `response_format: json_schema` (strict) over the full conversation, so the terminal generation is schema-enforced and cannot invite more tool calls.
+
+The finalize step costs one extra request per structured tool-loop generation (its prompt is largely served from Moonshot's context cache). If the step budget runs out while the model is still requesting tools, the unexecuted `tool_calls` are stripped from the finalize request so Moonshot does not reject the history.
+
+Deferral only applies to non-streaming generation with tools present; schema-only requests keep the original single-request behavior. Opt out (and restore `response_format` on every step) via provider config:
+
+```php
+'moonshot' => [
+    // ...
+    'defer_structured_output' => false,
+],
+```
+
+Streaming with tools + schema omits `response_format` on tool-carrying steps but has no finalize step; the final text is prompt-steered JSON, so decode it yourself at `StreamEnd`.
 
 ### Web search
 

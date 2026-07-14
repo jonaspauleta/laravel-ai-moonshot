@@ -6,13 +6,18 @@ namespace Jonaspauleta\LaravelAiMoonshot;
 
 use Generator;
 use Illuminate\JsonSchema\Types\Type;
+use Illuminate\Support\Collection;
 use Laravel\Ai\Contracts\Providers\TextProvider;
 use Laravel\Ai\Contracts\Tool;
 use Laravel\Ai\Exceptions\NoSuchToolException;
+use Laravel\Ai\Gateway\StepContext;
+use Laravel\Ai\Gateway\StepResponse;
 use Laravel\Ai\Gateway\TextGenerationLoop;
 use Laravel\Ai\Gateway\TextGenerationOptions;
+use Laravel\Ai\Messages\AssistantMessage;
 use Laravel\Ai\Messages\Message;
 use Laravel\Ai\Providers\Provider;
+use Laravel\Ai\Responses\Data\Step;
 use Laravel\Ai\Responses\Data\ToolCall;
 use Laravel\Ai\Responses\Data\ToolResult;
 use Laravel\Ai\Responses\TextResponse;
@@ -22,9 +27,20 @@ final class MoonshotTextGenerationLoop extends TextGenerationLoop
 {
     private ?int $timeout = null;
 
+    private ?string $model = null;
+
+    private ?string $instructions = null;
+
+    /** @var array<string, Type>|null */
+    private ?array $schema = null;
+
+    private ?TextGenerationOptions $options = null;
+
+    private bool $structuredOutputDeferred = false;
+
     public function __construct(
         private readonly MoonshotGateway $moonshotGateway,
-        private readonly Provider $provider,
+        private readonly Provider&TextProvider $provider,
     ) {
         parent::__construct($moonshotGateway);
     }
@@ -47,11 +63,23 @@ final class MoonshotTextGenerationLoop extends TextGenerationLoop
     ): TextResponse {
         $this->moonshotGateway->beginTextGeneration();
         $this->timeout = $timeout;
+        $this->model = $model;
+        $this->instructions = $instructions;
+        $this->schema = $schema;
+        $this->options = $options;
+        $this->structuredOutputDeferred = filled($schema)
+            && filled($tools)
+            && $this->moonshotGateway->shouldDeferStructuredOutput($this->provider);
 
         try {
             return parent::generate($provider, $model, $instructions, $messages, $tools, $schema, $options, $timeout);
         } finally {
             $this->timeout = null;
+            $this->model = null;
+            $this->instructions = null;
+            $this->schema = null;
+            $this->options = null;
+            $this->structuredOutputDeferred = false;
         }
     }
 
@@ -82,6 +110,50 @@ final class MoonshotTextGenerationLoop extends TextGenerationLoop
         }
     }
 
+    /**
+     * When structured output was deferred (tools + schema on Kimi), the tool
+     * loop ran without `response_format`. Append one final tool-free request
+     * that enforces the strict `json_schema` over the full conversation, so
+     * the terminal generation is schema-validated and cannot invite more
+     * tool calls.
+     *
+     * @param  Collection<int, Step>  $steps
+     * @param  array<int, Message>  $allMessages
+     */
+    #[Override]
+    protected function buildFinalResponse(
+        Collection $steps,
+        array $allMessages,
+        int $originalMessageCount,
+        ?StepResponse $lastResult,
+    ): TextResponse {
+        if (! $this->structuredOutputDeferred || $this->model === null) {
+            return parent::buildFinalResponse($steps, $allMessages, $originalMessageCount, $lastResult);
+        }
+
+        $finalizeResult = $this->moonshotGateway->generateTextStep(
+            $this->provider,
+            $this->model,
+            $this->instructions,
+            $this->withoutTrailingUnansweredToolCalls($allMessages),
+            [],
+            $this->schema,
+            $this->options,
+            $this->timeout,
+            new StepContext(stepNumber: $steps->count(), isFinalStep: true),
+        );
+
+        $steps->push($this->buildStep($finalizeResult));
+
+        $allMessages[] = new AssistantMessage(
+            $finalizeResult->text,
+            collect($finalizeResult->toolCalls),
+            $finalizeResult->providerContentBlocks,
+        );
+
+        return parent::buildFinalResponse($steps, $allMessages, $originalMessageCount, $finalizeResult);
+    }
+
     #[Override]
     protected function executeToolCalls(array $toolCalls, array $tools): array
     {
@@ -110,5 +182,30 @@ final class MoonshotTextGenerationLoop extends TextGenerationLoop
                 $toolCall->resultId,
             );
         }, $toolCalls);
+    }
+
+    /**
+     * Drop unexecuted `tool_calls` from a trailing assistant message (step
+     * budget exhausted); Moonshot rejects assistant `tool_calls` rows that
+     * have no matching `tool` responses.
+     *
+     * @param  array<int, Message>  $messages
+     * @return array<int, Message>
+     */
+    private function withoutTrailingUnansweredToolCalls(array $messages): array
+    {
+        $last = end($messages);
+
+        if (! $last instanceof AssistantMessage || $last->toolCalls->isEmpty()) {
+            return $messages;
+        }
+
+        array_pop($messages);
+
+        if (filled($last->content)) {
+            $messages[] = new AssistantMessage($last->content, null, $last->providerContentBlocks);
+        }
+
+        return $messages;
     }
 }
