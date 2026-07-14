@@ -5,10 +5,11 @@ declare(strict_types=1);
 /*
  * Live-API smoke test for the Moonshot provider.
  *
- * Hits the real Moonshot endpoint with three scenarios:
+ * Hits the real Moonshot endpoint with four scenarios:
  *   1. one-shot prompt
  *   2. streaming prompt
  *   3. tool call
+ *   4. tool call + structured output (deferred json_schema)
  *
  * Gated by the MOONSHOT_API_KEY environment variable. Skips with a clear
  * message when the key is missing so it stays safe to wire into CI on
@@ -22,6 +23,7 @@ use function Laravel\Ai\agent;
 
 use Laravel\Ai\AiServiceProvider;
 use Laravel\Ai\Contracts\Tool;
+use Laravel\Ai\Responses\StructuredAgentResponse;
 use Laravel\Ai\Streaming\Events\StreamEvent;
 use Laravel\Ai\Streaming\Events\TextDelta;
 use Laravel\Ai\Tools\Request as ToolRequest;
@@ -43,27 +45,24 @@ if ($apiKey === '') {
     exit(0);
 }
 
-$app = Application::create(
-    basePath: dirname(__DIR__).'/build/smoke',
-    resolvingCallback: function ($app) use ($apiKey): void {
-        $app->register(AiServiceProvider::class);
-        $app->register(MoonshotServiceProvider::class);
+$app = Application::create(basePath: dirname(__DIR__).'/build/smoke');
 
-        $app['config']->set('ai.providers.moonshot', [
-            'driver' => 'moonshot',
-            'name' => 'moonshot',
-            'key' => $apiKey,
-        ]);
-        $app['config']->set('ai.default', 'moonshot');
-    },
-);
+$app->register(AiServiceProvider::class);
+$app->register(MoonshotServiceProvider::class);
 
-echo "[1/3] one-shot prompt against kimi-k2.6\n";
+$app['config']->set('ai.providers.moonshot', [
+    'driver' => 'moonshot',
+    'name' => 'moonshot',
+    'key' => $apiKey,
+]);
+$app['config']->set('ai.default', 'moonshot');
+
+echo "[1/4] one-shot prompt against kimi-k2.6\n";
 $response = agent('You are concise. Reply in five words or fewer.')
     ->prompt('Say hello.', provider: 'moonshot', model: 'kimi-k2.6');
-echo '    -> '.trim($response->text)."\n";
+echo '    -> '.mb_trim($response->text)."\n";
 
-echo "[2/3] streaming prompt against kimi-k2.6\n";
+echo "[2/4] streaming prompt against kimi-k2.6\n";
 $buffer = '';
 $stream = agent('You are concise. Reply in five words or fewer.')
     ->stream('Say hello again.', provider: 'moonshot', model: 'kimi-k2.6');
@@ -72,11 +71,11 @@ foreach ($stream as $event) {
         $buffer .= $event->delta;
     }
 }
-echo '    -> '.trim($buffer)."\n";
+echo '    -> '.mb_trim($buffer)."\n";
 
-echo "[3/3] tool call against kimi-k2.6\n";
+echo "[3/4] tool call against kimi-k2.6\n";
 
-$weatherTool = new class implements Tool
+final class SmokeWeatherTool implements Tool
 {
     public function description(): string
     {
@@ -94,13 +93,38 @@ $weatherTool = new class implements Tool
     {
         return 'Sunny, 24C in '.$request->string('city').'.';
     }
-};
+}
+
+$weatherTool = new SmokeWeatherTool;
 
 $toolResponse = agent(
     instructions: 'Always use the weather tool when asked about weather.',
     tools: [$weatherTool],
 )->prompt('What is the weather in Lisbon?', provider: 'moonshot', model: 'kimi-k2.6');
 
-echo '    -> '.trim($toolResponse->text)."\n";
+echo '    -> '.mb_trim($toolResponse->text)."\n";
+
+echo "[4/4] tool call + structured output (deferred json_schema) against kimi-k2.6\n";
+
+$structuredResponse = agent(
+    instructions: 'Always use the weather tool when asked about weather.',
+    tools: [$weatherTool],
+    schema: fn (JsonSchema $schema): array => [
+        'city' => $schema->string()->description('City the weather applies to'),
+        'summary' => $schema->string()->description('Short weather summary'),
+    ],
+)->prompt('What is the weather in Lisbon?', provider: 'moonshot', model: 'kimi-k2.6');
+
+$structured = $structuredResponse instanceof StructuredAgentResponse
+    ? $structuredResponse->structured
+    : [];
+$toolCallCount = $structuredResponse->toolCalls->count();
+
+echo '    -> tool calls: '.$toolCallCount.' structured: '.json_encode($structured)."\n";
+
+if ($toolCallCount < 1 || $structured === []) {
+    fwrite(STDERR, 'deferred structured output smoke FAILED: expected >=1 tool call and non-empty structured data. Final text: '.$structuredResponse->text."\n");
+    exit(1);
+}
 
 echo "smoke OK\n";

@@ -5,6 +5,14 @@ All notable changes to `laravel-ai-moonshot` are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-14
+
+### Changed
+
+- **Structured output is now deferred until after the tool loop when tools are present (behavior change).** Kimi frequently returns an empty schema-valid JSON object instead of invoking tools when a request carries both `tools` (`tool_choice: auto`) and a strict `json_schema` `response_format`. Tool-loop steps now omit `response_format` (the schema prompt instructions still steer the model), and `MoonshotTextGenerationLoop` appends one final tool-free request with the strict `json_schema` over the full conversation. Expect one extra request per structured tool-loop generation. Opt out via `ai.providers.moonshot.defer_structured_output => false`.
+- Unexecuted trailing `tool_calls` (step-budget exhaustion) are stripped from the finalize request so Moonshot does not reject the replayed history.
+- Live smoke (`composer smoke`) gains a fourth scenario asserting at least one tool call followed by a non-empty structured final under deferred mode, and its bootstrap now works on current Testbench.
+
 ## [2.0.0] - 2026-07-09
 
 ### Added

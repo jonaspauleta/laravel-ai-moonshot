@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Jonaspauleta\LaravelAiMoonshot\Concerns;
 
+use Jonaspauleta\LaravelAiMoonshot\MoonshotTextGenerationLoop;
 use Laravel\Ai\Gateway\Concerns\ComposesSchemaInstructions;
 use Laravel\Ai\Gateway\TextGenerationOptions;
 use Laravel\Ai\ObjectSchema;
@@ -21,6 +22,24 @@ trait BuildsTextRequests
      * in-turn tool steps when the stream or stored messages omitted reasoning.
      */
     private const FALLBACK_REASONING_CONTENT_FOR_KIMI_TOOL_STEP = "\u{200B}";
+
+    /**
+     * Whether strict `response_format` must be withheld from requests that
+     * also carry `tools`.
+     *
+     * Kimi frequently returns an empty schema-valid JSON object without ever
+     * invoking a tool when a request combines `tools` (tool_choice: auto) with
+     * a strict `json_schema` response_format. When deferral is on (the
+     * default), tool-loop steps omit `response_format` (the schema prompt
+     * from {@see ComposesSchemaInstructions} keeps steering the model) and
+     * {@see MoonshotTextGenerationLoop} appends one final tool-free request
+     * that enforces the schema. Disable via
+     * `ai.providers.moonshot.defer_structured_output => false`.
+     */
+    public function shouldDeferStructuredOutput(Provider $provider): bool
+    {
+        return (bool) ($provider->additionalConfiguration()['defer_structured_output'] ?? true);
+    }
 
     /**
      * Build the request body for the Chat Completions API.
@@ -61,7 +80,7 @@ trait BuildsTextRequests
             }
         }
 
-        if (filled($schema)) {
+        if (filled($schema) && (! isset($body['tools']) || ! $this->shouldDeferStructuredOutput($provider))) {
             $body['response_format'] = $this->buildResponseFormat($schema);
         }
 
